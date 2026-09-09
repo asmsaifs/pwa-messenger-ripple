@@ -1,0 +1,82 @@
+import { and, eq, or } from 'drizzle-orm';
+import { getDb } from './db';
+import { calls } from './schema';
+import { uuidv7 } from '../../shared/id';
+import type { Env } from '../env';
+import type { Actor } from '../types';
+
+export async function createCall(
+  env: Env,
+  actor: Actor,
+  input: { conversationId: string; calleeId: string },
+) {
+  const db = getDb(env);
+  const [row] = await db
+    .insert(calls)
+    .values({
+      id: uuidv7(),
+      conversationId: input.conversationId,
+      callerId: actor.userId,
+      calleeId: input.calleeId,
+      status: 'ringing',
+      createdAt: Date.now(),
+    })
+    .returning();
+  return row;
+}
+
+// CallDO is the only writer of the final row (docs/01 §4.3); this repo
+// function is what its RPC calls into, scoped to the two participants.
+export async function updateCallStatus(
+  env: Env,
+  actor: Actor,
+  callId: string,
+  patch: {
+    status: 'active' | 'ended' | 'missed' | 'declined' | 'failed';
+    startedAt?: number;
+    endedAt?: number;
+    endReason?: string;
+    iceRelayed?: boolean;
+  },
+) {
+  const db = getDb(env);
+  const [row] = await db
+    .update(calls)
+    .set({
+      status: patch.status,
+      startedAt: patch.startedAt,
+      endedAt: patch.endedAt,
+      endReason: patch.endReason,
+      iceRelayed: patch.iceRelayed === undefined ? undefined : patch.iceRelayed ? 1 : 0,
+    })
+    .where(
+      and(
+        eq(calls.id, callId),
+        or(eq(calls.callerId, actor.userId), eq(calls.calleeId, actor.userId)),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+export async function getCall(env: Env, actor: Actor, id: string) {
+  const db = getDb(env);
+  return db.query.calls.findFirst({
+    where: and(
+      eq(calls.id, id),
+      or(eq(calls.callerId, actor.userId), eq(calls.calleeId, actor.userId)),
+    ),
+  });
+}
+
+export async function listCallsForConversation(
+  env: Env,
+  actor: Actor,
+  conversationId: string,
+) {
+  const db = getDb(env);
+  const rows = await db.query.calls.findMany({
+    where: eq(calls.conversationId, conversationId),
+  });
+  return rows.filter((r) => r.callerId === actor.userId || r.calleeId === actor.userId);
+}

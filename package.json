@@ -20,9 +20,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply ripple-local --local",
+    "db:migrate:remote": "wrangler d1 migrations apply ripple-local --remote",
+    "db:seed": "wrangler d1 execute ripple-local --local --file=./scripts/seed.sql"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.6.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -40,6 +45,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "concurrently": "^9.1.2",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.18.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.18",
