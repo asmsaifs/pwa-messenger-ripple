@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { CameraCaptureSheet } from '../components/CameraCaptureSheet';
 import { resolveAttachmentUrl, uploadAttachment } from '../lib/attachments';
 import { useConversation, useSetReadMarker } from '../lib/queries/conversations';
 import { useConversationSocket } from '../lib/ws/conversationSocket';
@@ -156,6 +157,8 @@ export function ThreadPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraFallbackRef = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
   const rows = useMemo(() => buildRows(messages), [messages]);
 
@@ -194,13 +197,16 @@ export function ThreadPage() {
   // complete, then send a `file`/`image` message referencing the finished
   // attachment — same clientId-keyed optimistic path a text send takes
   // (docs/07 E2E #5).
-  async function handleFilePicked(file: File) {
+  async function handleFilePicked(
+    file: File,
+    meta?: { width?: number; height?: number },
+  ) {
     if (!conversationId) return;
     setUploadError(null);
     setUploading(true);
     try {
       const kind = file.type.startsWith('image/') ? 'image' : 'file';
-      const attachment = await uploadAttachment(conversationId, file, kind);
+      const attachment = await uploadAttachment(conversationId, file, kind, meta);
       sendMessage({ clientId: uuidv7(), kind, attachmentId: attachment.id });
     } catch (err) {
       setUploadError(err instanceof ApiError ? messageForErrorCode(err.code) : 'Upload failed.');
@@ -209,8 +215,28 @@ export function ThreadPage() {
     }
   }
 
+  // docs/04 §2.4: open the in-app sheet first; if `getUserMedia` is denied
+  // (or there's no camera to grant), fall back to the OS picker's own camera
+  // capture UI (docs/09 M10's "denied-permission fallback works").
+  function handleCameraDenied() {
+    setCameraOpen(false);
+    cameraFallbackRef.current?.click();
+  }
+
+  function handleCameraCapture(file: File, width: number, height: number) {
+    setCameraOpen(false);
+    void handleFilePicked(file, { width, height });
+  }
+
   return (
     <div className="flex h-full flex-col">
+      {cameraOpen && (
+        <CameraCaptureSheet
+          onCapture={handleCameraCapture}
+          onDenied={handleCameraDenied}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
       {/* Not user-facing chrome — a hook for e2e specs to wait on the socket
           actually being open before driving frames through it. */}
       <span hidden data-testid="ws-status" data-status={status} />
@@ -379,6 +405,29 @@ export function ThreadPage() {
           aria-label="Attach file"
         >
           {uploading ? '…' : '＋'}
+        </button>
+        <input
+          ref={cameraFallbackRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          data-testid="camera-fallback-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void handleFilePicked(file);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => setCameraOpen(true)}
+          disabled={uploading}
+          data-testid="camera-button"
+          className="text-slate-500 hover:text-slate-900 disabled:opacity-40"
+          aria-label="Take photo"
+        >
+          📷
         </button>
         <button
           type="button"

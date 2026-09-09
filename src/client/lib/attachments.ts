@@ -21,6 +21,7 @@ export async function uploadAttachment(
   conversationId: string,
   file: File,
   kind: AttachmentKind,
+  meta?: { width?: number; height?: number },
 ): Promise<Attachment> {
   if (file.size > MAX_ATTACHMENT_BYTES) {
     throw new ApiError('upload/too-large', 'That file is too large.');
@@ -56,7 +57,7 @@ export async function uploadAttachment(
   const { attachment } = await apiFetch(
     `/api/attachments/${attachmentId}/complete`,
     completeAttachmentResponseSchema,
-    { method: 'POST', body: completeAttachmentInputSchema.parse({}) },
+    { method: 'POST', body: completeAttachmentInputSchema.parse(meta ?? {}) },
   );
   return attachment;
 }
