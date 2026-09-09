@@ -234,7 +234,12 @@ export function useConversationSocket(conversationId: string | undefined) {
   // to the HTTP-fallback flush if not. Either way the DO's
   // `UNIQUE(client_id)` makes a duplicate impossible even if both paths race.
   const sendMessage = useCallback(
-    (input: { clientId: string; kind: 'text'; body: string }) => {
+    (input: {
+      clientId: string;
+      kind: 'text' | 'file' | 'image' | 'voice';
+      body?: string;
+      attachmentId?: string;
+    }) => {
       if (!conversationId) return;
       setPending((prev) => new Map(prev).set(input.clientId, 'pending'));
       void enqueueOutboxMessage({ ...input, conversationId }).then(() => {

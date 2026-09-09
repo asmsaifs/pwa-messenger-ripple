@@ -276,6 +276,46 @@ describe('policy', () => {
     });
   });
 
+  describe('assertCanCompleteAttachment', () => {
+    it('allow: uploader completing their own pending attachment', async () => {
+      const created = await createPendingAttachment(env, g.actorA, {
+        conversationId: g.conversationId,
+        r2Key: `att/${g.conversationId}/complete-allow.png`,
+        mimeType: 'image/png',
+        byteSize: 10,
+      });
+      const attachment = await policy.assertCanCompleteAttachment(env, g.actorA, created!.id);
+      expect(attachment.id).toBe(created!.id);
+    });
+
+    it('deny: a different member (not the uploader) gets not-found', async () => {
+      const created = await createPendingAttachment(env, g.actorA, {
+        conversationId: g.conversationId,
+        r2Key: `att/${g.conversationId}/complete-peer.png`,
+        mimeType: 'image/png',
+        byteSize: 10,
+      });
+      await expectCode(
+        policy.assertCanCompleteAttachment(env, g.actorB, created!.id),
+        'policy/not-found',
+      );
+    });
+
+    it('deny: already-ready attachment cannot be completed again', async () => {
+      const created = await createPendingAttachment(env, g.actorA, {
+        conversationId: g.conversationId,
+        r2Key: `att/${g.conversationId}/complete-twice.png`,
+        mimeType: 'image/png',
+        byteSize: 10,
+      });
+      await markAttachmentReady(env, g.actorA, created!.id, {});
+      await expectCode(
+        policy.assertCanCompleteAttachment(env, g.actorA, created!.id),
+        'policy/forbidden',
+      );
+    });
+  });
+
   describe('assertAttachmentReadable', () => {
     it('allow: member, ready attachment', async () => {
       const created = await createPendingAttachment(env, g.actorA, {

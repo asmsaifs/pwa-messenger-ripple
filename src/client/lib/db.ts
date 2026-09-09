@@ -33,6 +33,16 @@ export interface MetaRow {
   value: number;
 }
 
+// Downloaded attachment bytes, cached so a re-open of the thread doesn't
+// re-fetch through a fresh presigned GET (docs/02 §7: "blobs LRU over
+// 300 MB"). `fetchedAt` drives that LRU eviction.
+export interface BlobRow {
+  attachmentId: string;
+  blob: Blob;
+  mimeType: string;
+  fetchedAt: number;
+}
+
 // Schema mirrors docs/02 §7 verbatim (the client/server contract for
 // IndexedDB layout) so later milestones (M9 attachments, M4-era conversation
 // list caching) can start using `blobs`/`conversations` without a schema
@@ -41,6 +51,7 @@ class RippleDB extends Dexie {
   outbox!: Table<OutboxRow, string>;
   messages!: Table<MessageRow, [string, number]>;
   meta!: Table<MetaRow, string>;
+  blobs!: Table<BlobRow, string>;
 
   constructor() {
     super('ripple');

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getDb } from './db';
 import { profiles } from './schema';
 import type { Env } from '../env';
@@ -57,4 +57,16 @@ export async function updateProfile(env: Env, actor: Actor, patch: UpdateProfile
     .where(eq(profiles.userId, actor.userId))
     .returning();
   return row;
+}
+
+// `delta` is signed: attachment `ready` adds `byteSize`, deletion/orphan-sweep
+// subtracts it (docs/02 §1 column comment: "maintained on attachment
+// ready/delete"). Done as a single SQL expression, not read-then-write, so
+// concurrent uploads for the same user can't lose an update to a race.
+export async function adjustStorageUsed(env: Env, userId: string, delta: number) {
+  const db = getDb(env);
+  await db
+    .update(profiles)
+    .set({ storageUsed: sql`${profiles.storageUsed} + ${delta}` })
+    .where(eq(profiles.userId, userId));
 }

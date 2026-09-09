@@ -9,3 +9,9 @@ BETTER_AUTH_SECRET=dev-only-change-me
 # captcha check is skipped. Set to a real secret (and wire the matching
 # VITE_TURNSTILE_SITE_KEY client-side) to exercise it end to end.
 # TURNSTILE_SECRET=
+
+# M9 — R2 presigning (docs/08 §3). Any non-empty string works for local dev
+# (see .dev.vars's note); use a real "Object Read & Write" R2 API token to
+# exercise a real upload against the local Miniflare bucket.
+R2_ACCESS_KEY_ID=dev-only-change-me
+R2_SECRET_ACCESS_KEY=dev-only-change-me

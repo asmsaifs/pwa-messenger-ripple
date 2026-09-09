@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import { ZodError } from 'zod';
 import { AppError, toErrorResponse } from './errors';
 import { createAuth } from './lib/auth';
+import { sweepOrphanAttachments } from './lib/attachment-sweep';
 import { csrfProtection } from './middleware/csrf';
+import { attachmentsRoute } from './routes/attachments';
 import { conversationsRoute } from './routes/conversations';
 import { friendsRoute } from './routes/friends';
 import { healthRoute } from './routes/health';
@@ -52,6 +54,7 @@ app.route('/api/friends', friendsRoute);
 app.route('/api/invites', invitesRoute);
 app.route('/api/conversations', conversationsRoute);
 app.route('/api/messages', messagesRoute);
+app.route('/api/attachments', attachmentsRoute);
 app.route('/api/ws', wsRoute);
 
 // Fallback for anything not handled above: hand off to Workers Static Assets,
@@ -59,4 +62,12 @@ app.route('/api/ws', wsRoute);
 // `not_found_handling: single-page-application` in wrangler.jsonc.
 app.get('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // wrangler.jsonc's `triggers.crons` (M9: orphan attachment sweep). Other
+  // cron jobs in docs/03 §5 are added by the milestones that need them —
+  // this dispatches on schedule since there's only the one so far.
+  scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(sweepOrphanAttachments(env));
+  },
+};

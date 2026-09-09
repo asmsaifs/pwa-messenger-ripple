@@ -11,10 +11,20 @@
   },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 
-  // DO / R2 / KV / Queues / Email bindings are added in the milestones that
+  // DO / KV / Queues / Email bindings are added in the milestones that
   // introduce them (see docs/09-ROADMAP.md) so wrangler dev never points at
   // infrastructure the code doesn't use yet.
-  "vars": { "APP_ENV": "local", "APP_BASE_URL": "http://localhost:8787" },
+  //
+  // R2_ACCOUNT_ID is not secret (it's the account id half of the S3-compatible
+  // endpoint host, docs/08 §3) so it lives here rather than `.dev.vars`; the
+  // access key pair is the actual credential and stays in `.dev.vars`/`wrangler
+  // secret put`.
+  "vars": {
+    "APP_ENV": "local",
+    "APP_BASE_URL": "http://localhost:8787",
+    "R2_ACCOUNT_ID": "dev-local-account",
+    "MEDIA_BUCKET_NAME": "ripple-media-local",
+  },
 
   "d1_databases": [
     {
@@ -52,6 +62,21 @@
     { "tag": "v2", "new_sqlite_classes": ["ConversationDO"] },
     { "tag": "v3", "new_sqlite_classes": ["UserDO"] },
   ],
+
+  // Attachment bytes (M9, docs/02 §4). "local" here really is Miniflare's
+  // in-memory simulator (docs/08 §1's table), not a real R2 bucket — good
+  // enough for `env.MEDIA.put/get/head/delete` (what `/complete` and the
+  // orphan-sweep cron use) but it does not speak the S3-compatible API that
+  // presigned URLs are signed against, so a presigned PUT/GET only resolves
+  // against a real bucket (staging/prod, or `wrangler r2 bucket create
+  // ripple-media-local` + real R2 creds swapped into `.dev.vars` if you need
+  // to exercise an actual browser upload locally).
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "ripple-media-local" }],
+
+  // Orphan sweep (docs/03 §5): delete R2 object + row for attachments stuck
+  // `pending` >24h (abandoned uploads — the client never called `/complete`).
+  // Other cron jobs in docs/03 §5 belong to later milestones.
+  "triggers": { "crons": ["*/10 * * * *"] },
 
   // Cloudflare Email Sending (M5) — invite emails. No `send_email` binding
   // here yet: the pinned wrangler/Miniflare version in this repo (3.114.17)

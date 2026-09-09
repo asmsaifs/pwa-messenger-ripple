@@ -2,10 +2,94 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { resolveAttachmentUrl, uploadAttachment } from '../lib/attachments';
 import { useConversation, useSetReadMarker } from '../lib/queries/conversations';
 import { useConversationSocket } from '../lib/ws/conversationSocket';
+import { ApiError } from '../lib/api';
+import { messageForErrorCode } from '../lib/errors/messages';
 import { uuidv7 } from '@shared/id';
 import type { Message } from '@shared/messages';
+
+// docs/07 E2E #5: "File (2 MB pdf) + image from picker → peer downloads".
+// Fetches the bytes lazily (on click for a file, on mount for an image
+// thumbnail) rather than eagerly for every attachment message in the list —
+// each fetch spends a presigned GET + a network round trip (docs/02 §7's
+// blob cache only helps on a *second* view).
+function AttachmentBubble({ message }: { message: Message }) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const isImage = message.kind === 'image';
+
+  useEffect(() => {
+    let cancelled = false;
+    let created: string | null = null;
+    if (isImage && message.attachmentId) {
+      setLoading(true);
+      resolveAttachmentUrl(message.attachmentId)
+        .then((url) => {
+          if (cancelled) return;
+          created = url;
+          setObjectUrl(url);
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setError(err instanceof ApiError ? messageForErrorCode(err.code) : 'Could not load image.');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+    return () => {
+      cancelled = true;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [isImage, message.attachmentId]);
+
+  async function handleDownload() {
+    if (!message.attachmentId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const url = await resolveAttachmentUrl(message.attachmentId);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      a.click();
+    } catch (err) {
+      setError(err instanceof ApiError ? messageForErrorCode(err.code) : 'Could not download this file.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (isImage) {
+    return (
+      <div data-testid="attachment-image">
+        {objectUrl ? (
+          <img src={objectUrl} alt="" className="max-h-64 max-w-full rounded-lg" />
+        ) : (
+          <div className="flex h-32 w-48 items-center justify-center rounded-lg bg-black/10 text-xs">
+            {error ?? (loading ? 'Loading…' : 'Image')}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleDownload()}
+      disabled={loading}
+      data-testid="attachment-file"
+      className="flex items-center gap-2 rounded-lg bg-black/10 px-3 py-2 text-left text-sm underline disabled:opacity-60"
+    >
+      📎 {loading ? 'Downloading…' : error ? error : 'Download file'}
+    </button>
+  );
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -69,6 +153,9 @@ export function ThreadPage() {
   const setReadMarker = useSetReadMarker(conversationId ?? '');
 
   const [draft, setDraft] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const rows = useMemo(() => buildRows(messages), [messages]);
 
@@ -103,6 +190,25 @@ export function ThreadPage() {
     sendTyping(false);
   }
 
+  // docs/01 §4.2's upload flow, kicked off from the file picker: sign → PUT →
+  // complete, then send a `file`/`image` message referencing the finished
+  // attachment — same clientId-keyed optimistic path a text send takes
+  // (docs/07 E2E #5).
+  async function handleFilePicked(file: File) {
+    if (!conversationId) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const kind = file.type.startsWith('image/') ? 'image' : 'file';
+      const attachment = await uploadAttachment(conversationId, file, kind);
+      sendMessage({ clientId: uuidv7(), kind, attachmentId: attachment.id });
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? messageForErrorCode(err.code) : 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Not user-facing chrome — a hook for e2e specs to wait on the socket
@@ -132,6 +238,18 @@ export function ThreadPage() {
       {showReconnecting && (
         <div className="bg-amber-50 px-4 py-1 text-center text-xs text-amber-700">
           Reconnecting…
+        </div>
+      )}
+
+      {uploadError && (
+        <div
+          className="flex items-center justify-between gap-2 bg-red-50 px-4 py-1 text-xs text-red-700"
+          data-testid="upload-error"
+        >
+          <span>{uploadError}</span>
+          <button type="button" onClick={() => setUploadError(null)} aria-label="Dismiss">
+            ✕
+          </button>
         </div>
       )}
 
@@ -208,6 +326,8 @@ export function ThreadPage() {
                 >
                   {message.deletedAt ? (
                     <span className="italic opacity-70">Message deleted</span>
+                  ) : message.kind === 'file' || message.kind === 'image' ? (
+                    <AttachmentBubble message={message} />
                   ) : (
                     message.body
                   )}
@@ -239,13 +359,26 @@ export function ThreadPage() {
       </div>
 
       <div className="flex items-end gap-2 border-t border-slate-200 p-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          hidden
+          data-testid="attach-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void handleFilePicked(file);
+          }}
+        />
         <button
           type="button"
-          disabled
-          className="text-slate-300"
-          aria-label="Attach file (coming soon)"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          data-testid="attach-button"
+          className="text-slate-500 hover:text-slate-900 disabled:opacity-40"
+          aria-label="Attach file"
         >
-          ＋
+          {uploading ? '…' : '＋'}
         </button>
         <button
           type="button"

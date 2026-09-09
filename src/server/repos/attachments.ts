@@ -6,6 +6,10 @@ import type { Env } from '../env';
 import type { Actor } from '../types';
 
 export type CreateAttachmentInput = {
+  // Callers that must know the id before the row exists — e.g. the `/sign`
+  // route, which builds `r2Key` from it — pass one in; otherwise the repo
+  // generates its own (the policy suite's tests do this, docs/07 §2).
+  id?: string;
   conversationId: string;
   r2Key: string;
   mimeType: string;
@@ -25,7 +29,7 @@ export async function createPendingAttachment(
   const [row] = await db
     .insert(attachments)
     .values({
-      id: uuidv7(),
+      id: input.id ?? uuidv7(),
       conversationId: input.conversationId,
       uploaderId: actor.userId,
       r2Key: input.r2Key,
@@ -43,7 +47,12 @@ export async function markAttachmentReady(
   env: Env,
   actor: Actor,
   id: string,
-  meta: { width?: number; height?: number; durationMs?: number; waveform?: string },
+  meta: {
+    width?: number | undefined;
+    height?: number | undefined;
+    durationMs?: number | undefined;
+    waveform?: string | undefined;
+  },
 ) {
   const db = getDb(env);
   const [row] = await db
@@ -53,6 +62,25 @@ export async function markAttachmentReady(
     .returning();
   void actor; // caller re-checks uploader/member via policy before this runs
   return row;
+}
+
+// Sniffed MIME didn't match the declared type, or the object doesn't exist /
+// wrong size (docs/03 "Attachments": "else object deleted and row `failed`").
+// The R2 object itself is deleted by the caller (route), which is the one
+// that already has `env.MEDIA` in scope from the HEAD it just did.
+export async function markAttachmentFailed(env: Env, id: string) {
+  const db = getDb(env);
+  const [row] = await db
+    .update(attachments)
+    .set({ status: 'failed' })
+    .where(eq(attachments.id, id))
+    .returning();
+  return row;
+}
+
+export async function deleteAttachmentRow(env: Env, id: string) {
+  const db = getDb(env);
+  await db.delete(attachments).where(eq(attachments.id, id));
 }
 
 export async function getAttachment(env: Env, actor: Actor, id: string) {

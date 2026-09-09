@@ -27,4 +27,17 @@ export interface Env {
   // domain isn't onboarded in every env (docs/08), so local dev/tests still
   // typecheck and fall back to a log line in src/server/lib/mail.ts.
   EMAIL?: SendEmail;
+  // R2 (M9, docs/02 §4) — attachment bytes. Binding for server-side HEAD/GET/
+  // delete (never a public URL, docs/05 §7); the S3-compatible credentials
+  // below are for presigning PUT/GET only (aws4fetch, src/server/lib/r2-presign.ts) —
+  // R2Bucket itself has no presign method.
+  MEDIA: R2Bucket;
+  // The `R2Bucket` binding has no way to read back its own bucket name at
+  // runtime, but presigning needs it in the S3 endpoint path — kept in sync
+  // with wrangler.jsonc's `r2_buckets[0].bucket_name` by hand (it changes once
+  // per environment, not per deploy).
+  MEDIA_BUCKET_NAME: string;
+  R2_ACCOUNT_ID: string;
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
 }

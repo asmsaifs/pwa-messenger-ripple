@@ -213,6 +213,20 @@ export async function assertCanSignAttachmentUpload(
   }
 }
 
+// Not in docs/02 §5's matrix (which only lists sign/read) because `/complete`
+// isn't a separate authorization concept — it's "the uploader finishing their
+// own pending upload", the same actor `/sign` already attributed the row to.
+export async function assertCanCompleteAttachment(
+  env: Env,
+  actor: Actor,
+  attachmentId: string,
+) {
+  const attachment = await attachmentsRepo.getAttachment(env, actor, attachmentId);
+  if (!attachment || attachment.uploaderId !== actor.userId) notFound();
+  if (attachment.status !== 'pending') forbidden('attachment is not pending');
+  return attachment;
+}
+
 export async function assertAttachmentReadable(
   env: Env,
   actor: Actor,
