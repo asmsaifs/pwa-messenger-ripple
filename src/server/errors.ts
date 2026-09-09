@@ -24,6 +24,7 @@ const STATUS_FOR_CODE: Record<AppErrorCode, ContentfulStatusCode> = {
   'auth/unverified-email': 403,
   'auth/invalid-credentials': 401,
   'auth/csrf': 403,
+  'validation/invalid': 400,
   'policy/forbidden': 403,
   'policy/not-found': 404,
   'policy/blocked': 403,

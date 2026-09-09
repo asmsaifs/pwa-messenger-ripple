@@ -8,6 +8,7 @@ export const APP_ERROR_CODES = [
   'auth/unverified-email',
   'auth/invalid-credentials',
   'auth/csrf',
+  'validation/invalid',
   'policy/forbidden',
   'policy/not-found',
   'policy/blocked',

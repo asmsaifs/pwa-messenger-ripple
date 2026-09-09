@@ -1,2 +1,11 @@
 # Copy to .dev.vars (gitignored) for local `wrangler dev`.
 # M0 has no secrets yet — populated as later milestones add them (see docs/08-DEPLOYMENT.md §3).
+
+# M3 — Better Auth (docs/05 §10). Any non-empty string works for local dev;
+# rotating it invalidates every session.
+BETTER_AUTH_SECRET=dev-only-change-me
+
+# M3 — Turnstile (docs/05 §8). Optional: leave unset locally and the signup
+# captcha check is skipped. Set to a real secret (and wire the matching
+# VITE_TURNSTILE_SITE_KEY client-side) to exercise it end to end.
+# TURNSTILE_SECRET=

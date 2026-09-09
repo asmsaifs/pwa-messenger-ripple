@@ -24,4 +24,12 @@
       "migrations_dir": "./migrations",
     },
   ],
+
+  // Better Auth session secondary storage (M3, docs/02 §6).
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS_KV",
+      "id": "72298198f66845388ed5f2a3c7fce356",
+    },
+  ],
 }

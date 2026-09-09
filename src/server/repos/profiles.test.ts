@@ -12,17 +12,17 @@ describe('profiles repo', () => {
       id: 'usr_a',
       name: 'A',
       email: 'a@example.com',
-      emailVerified: 1,
-      createdAt: now,
-      updatedAt: now,
+      emailVerified: true,
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
     });
     await db.insert(user).values({
       id: 'usr_b',
       name: 'B',
       email: 'b@example.com',
-      emailVerified: 1,
-      createdAt: now,
-      updatedAt: now,
+      emailVerified: true,
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
     });
   });
 

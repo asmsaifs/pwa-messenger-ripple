@@ -8,6 +8,20 @@
       "when": 1788949596545,
       "tag": "0001_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788951682412,
+      "tag": "0002_sudden_punisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788951847117,
+      "tag": "0003_faithful_thor",
+      "breakpoints": true
     }
   ]
 }

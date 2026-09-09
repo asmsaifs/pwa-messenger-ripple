@@ -16,14 +16,20 @@ import {
   unique,
 } from 'drizzle-orm/sqlite-core';
 
+// `{ mode: 'timestamp' | 'boolean' }` on these columns (but not our own
+// app tables below, which store epoch millis as plain numbers) because
+// Better Auth's internal model always produces JS `Date`/`boolean` values for
+// these fields and hands them to the adapter as-is — bound to D1 without
+// drizzle's mode-driven serialization, a bare `Date` object 500s with
+// `D1_TYPE_ERROR: Type 'object' not supported`.
 export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  emailVerified: integer('emailVerified').notNull().default(0),
+  emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull().default(false),
   image: text('image'),
-  createdAt: integer('createdAt').notNull(),
-  updatedAt: integer('updatedAt').notNull(),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull(),
 });
 
 export const session = sqliteTable(
@@ -34,11 +40,11 @@ export const session = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     token: text('token').notNull().unique(),
-    expiresAt: integer('expiresAt').notNull(),
+    expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
     ipAddress: text('ipAddress'),
     userAgent: text('userAgent'),
-    createdAt: integer('createdAt').notNull(),
-    updatedAt: integer('updatedAt').notNull(),
+    createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull(),
   },
   (t) => [index('idx_session_user').on(t.userId)],
 );
@@ -51,16 +57,27 @@ export const account = sqliteTable('account', {
   accountId: text('accountId').notNull(),
   providerId: text('providerId').notNull(),
   password: text('password'),
-  createdAt: integer('createdAt').notNull(),
-  updatedAt: integer('updatedAt').notNull(),
+  // Unused while email/password is the only provider (no OAuth plugin
+  // configured) — present because Better Auth's core `account` model always
+  // includes them; the drizzle adapter validates the full model shape at
+  // startup and errors if they're missing.
+  accessToken: text('accessToken'),
+  refreshToken: text('refreshToken'),
+  idToken: text('idToken'),
+  accessTokenExpiresAt: integer('accessTokenExpiresAt', { mode: 'timestamp' }),
+  refreshTokenExpiresAt: integer('refreshTokenExpiresAt', { mode: 'timestamp' }),
+  scope: text('scope'),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull(),
 });
 
 export const verification = sqliteTable('verification', {
   id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
-  expiresAt: integer('expiresAt').notNull(),
-  createdAt: integer('createdAt').notNull(),
+  expiresAt: integer('expiresAt', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull(),
 });
 
 // ── app profile (1:1 with user; keeps our columns out of Better Auth's table)

@@ -23,9 +23,9 @@ export async function seedUsers(env: Env) {
       id,
       name: id,
       email: `${id}@example.com`,
-      emailVerified: id === 'usr_e' ? 0 : 1,
-      createdAt: now,
-      updatedAt: now,
+      emailVerified: id !== 'usr_e',
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
     });
     await db.insert(profiles).values({ userId: id, displayName: id, createdAt: now });
   }

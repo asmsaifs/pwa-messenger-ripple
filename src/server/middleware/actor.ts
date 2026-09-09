@@ -1,30 +1,39 @@
 import { createMiddleware } from 'hono/factory';
-import { getCookie } from 'hono/cookie';
 import { AppError } from '../errors';
-import { getSessionWithUser } from '../repos/auth';
+import { createAuth } from '../lib/auth';
 import type { Env } from '../env';
 import type { Actor } from '../types';
 
+// M2's placeholder cookie name — Better Auth (M3) is configured to use this
+// exact name (`src/server/lib/auth.ts`), so nothing downstream had to change.
 export const SESSION_COOKIE = '__Host-ripple.session';
 
 // Identity comes from the session cookie, never a request body/WS field
-// (CLAUDE.md hard rule 4). Interim lookup straight against the `session`/`user`
-// tables (docs/05 §2) ahead of Better Auth landing in M3 — same tables, same
-// cookie name, so routes written against `c.get('actor')` don't change.
+// (CLAUDE.md hard rule 4). Better Auth validates the signed cookie and
+// resolves the session/user rows itself — this only maps its result onto the
+// app's `Actor` shape.
+// `authUser` rides alongside `actor` for routes that need Better Auth's own
+// fields (email, display name) without a second lookup — `Actor` itself stays
+// the fixed `{ userId, sessionId, emailVerified }` shape every repo/policy
+// function is written against (docs/02 §"Conventions").
+export type AuthUser = { id: string; email: string; name: string };
+
 export const requireAuth = createMiddleware<{
   Bindings: Env;
-  Variables: { actor: Actor };
+  Variables: { actor: Actor; authUser: AuthUser };
 }>(async (c, next) => {
-  const token = getCookie(c, SESSION_COOKIE);
-  if (!token) throw new AppError('auth/unauthenticated');
-
-  const row = await getSessionWithUser(c.env, token);
-  if (!row || row.expiresAt < Date.now()) throw new AppError('auth/unauthenticated');
+  const session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
+  if (!session) throw new AppError('auth/unauthenticated');
 
   c.set('actor', {
-    userId: row.userId,
-    sessionId: row.sessionId,
-    emailVerified: row.emailVerified === 1,
+    userId: session.user.id,
+    sessionId: session.session.id,
+    emailVerified: session.user.emailVerified,
+  });
+  c.set('authUser', {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
   });
   await next();
 });

@@ -10,7 +10,15 @@ export type CreateProfileInput = {
   statusText?: string;
 };
 
-export type UpdateProfileInput = Partial<CreateProfileInput>;
+// Matches the zod-inferred shape of `updateMeSchema` (src/shared/me.ts)
+// exactly, incl. `| undefined` on each optional field — with
+// `exactOptionalPropertyTypes` on, `Partial<CreateProfileInput>` alone isn't
+// assignable from a zod `.optional()` output.
+export type UpdateProfileInput = {
+  displayName?: string | undefined;
+  avatarKey?: string | undefined;
+  statusText?: string | null | undefined;
+};
 
 // Bootstrap the 1:1 profile row for the caller's own account (docs/02 §1).
 export async function createProfile(env: Env, actor: Actor, input: CreateProfileInput) {
