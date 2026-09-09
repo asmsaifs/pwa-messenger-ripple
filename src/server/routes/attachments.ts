@@ -126,5 +126,12 @@ attachmentsRoute.get('/:id/url', async (c) => {
   const id = c.req.param('id');
   const attachment = await policy.assertAttachmentReadable(c.env, actor, id);
   const { url, expiresAt } = await presignGetUrl(c.env, attachment.r2Key);
-  return c.json(attachmentUrlResponseSchema.parse({ url, expiresAt }));
+  return c.json(
+    attachmentUrlResponseSchema.parse({
+      url,
+      expiresAt,
+      durationMs: attachment.durationMs,
+      waveform: attachment.waveform,
+    }),
+  );
 });

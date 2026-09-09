@@ -57,8 +57,14 @@ export type Attachment = z.infer<typeof attachmentSchema>;
 export const completeAttachmentResponseSchema = z.object({ attachment: attachmentSchema });
 export type CompleteAttachmentResponse = z.infer<typeof completeAttachmentResponseSchema>;
 
+// `durationMs`/`waveform` ride along on the presigned-GET response (not a
+// separate metadata endpoint) so a voice bubble can render its waveform from
+// one request without decoding audio itself (docs/06 §4: "store smallint[]
+// so the receiver renders without decoding") — null for non-voice kinds.
 export const attachmentUrlResponseSchema = z.object({
   url: z.string(),
   expiresAt: z.number().int(),
+  durationMs: z.number().int().nullable(),
+  waveform: z.string().nullable(),
 });
 export type AttachmentUrlResponse = z.infer<typeof attachmentUrlResponseSchema>;

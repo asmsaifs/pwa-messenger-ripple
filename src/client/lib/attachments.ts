@@ -21,7 +21,7 @@ export async function uploadAttachment(
   conversationId: string,
   file: File,
   kind: AttachmentKind,
-  meta?: { width?: number; height?: number },
+  meta?: { width?: number; height?: number; durationMs?: number; waveform?: string },
 ): Promise<Attachment> {
   if (file.size > MAX_ATTACHMENT_BYTES) {
     throw new ApiError('upload/too-large', 'That file is too large.');
@@ -62,28 +62,62 @@ export async function uploadAttachment(
   return attachment;
 }
 
-// Presigned GET → blob, cached in Dexie (docs/02 §7's `blobs` store) so a
-// reopened thread doesn't spend a fresh presigned URL and network fetch on
-// every render. Returns an object URL — callers own revoking it. Takes just
-// an id (not a full `Attachment`) because the receiving peer's message frame
-// only ever carries `attachmentId` — the full row belongs to the uploader's
-// `/complete` response.
+// Fetches `presignedUrl` and drops the bytes into Dexie's `blobs` store
+// (docs/02 §7) — the cache-check/cache-write half shared by
+// `resolveAttachmentUrl` (which also has to fetch the presigned URL itself)
+// and the voice player (which already has one from `resolveVoiceMeta`, so it
+// skips a redundant `/url` round trip).
+async function cacheBlobFrom(attachmentId: string, presignedUrl: string): Promise<Blob> {
+  const cached = await db.blobs.get(attachmentId);
+  if (cached) return cached.blob;
+  const res = await fetch(presignedUrl);
+  if (!res.ok) throw new ApiError('net/timeout', 'Could not download this attachment.');
+  const blob = await res.blob();
+  await db.blobs.put({ attachmentId, blob, mimeType: blob.type, fetchedAt: Date.now() });
+  return blob;
+}
+
+// Presigned GET → blob, cached in Dexie so a reopened thread doesn't spend a
+// fresh presigned URL and network fetch on every render. Returns an object
+// URL — callers own revoking it. Takes just an id (not a full `Attachment`)
+// because the receiving peer's message frame only ever carries
+// `attachmentId` — the full row belongs to the uploader's `/complete` response.
 export async function resolveAttachmentUrl(attachmentId: string): Promise<string> {
   const cached = await db.blobs.get(attachmentId);
   if (cached) return URL.createObjectURL(cached.blob);
-
   const { url } = await apiFetch(
     `/api/attachments/${attachmentId}/url`,
     attachmentUrlResponseSchema,
   );
-  const res = await fetch(url);
-  if (!res.ok) throw new ApiError('net/timeout', 'Could not download this attachment.');
-  const blob = await res.blob();
-  await db.blobs.put({
-    attachmentId,
-    blob,
-    mimeType: blob.type,
-    fetchedAt: Date.now(),
-  });
+  const blob = await cacheBlobFrom(attachmentId, url);
+  return URL.createObjectURL(blob);
+}
+
+// Voice bubbles render their waveform immediately from stored metadata
+// (docs/06 §4: "receiver renders without decoding") without fetching the
+// audio bytes — those are only worth spending the network on once the peer
+// actually taps play (`resolveVoicePlaybackUrl` below, reusing the presigned
+// URL this returns instead of signing a second one).
+export async function resolveVoiceMeta(attachmentId: string): Promise<{
+  url: string;
+  durationMs: number | null;
+  waveform: number[] | null;
+}> {
+  const { url, durationMs, waveform } = await apiFetch(
+    `/api/attachments/${attachmentId}/url`,
+    attachmentUrlResponseSchema,
+  );
+  return {
+    url,
+    durationMs,
+    waveform: waveform ? (JSON.parse(waveform) as number[]) : null,
+  };
+}
+
+export async function resolveVoicePlaybackUrl(
+  attachmentId: string,
+  presignedUrl: string,
+): Promise<string> {
+  const blob = await cacheBlobFrom(attachmentId, presignedUrl);
   return URL.createObjectURL(blob);
 }

@@ -172,6 +172,34 @@ describe('attachments routes', () => {
     expect(url).toContain('X-Amz-Signature');
   });
 
+  it('GET /:id/url: voice attachments carry durationMs/waveform so the receiver renders without decoding', async () => {
+    const { conversationId, a, b } = await makeFriendsWithConversation('att-url-voice');
+    // A real EBML/WebM header — audio/webm's magic-bytes signature.
+    const WEBM_BYTES = Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3, 0x00, 0x00, 0x00, 0x00]);
+    const signRes = await post('/api/attachments/sign', a, {
+      conversationId,
+      contentType: 'audio/webm',
+      size: WEBM_BYTES.length,
+      name: 'voice.webm',
+      kind: 'voice',
+    });
+    const { attachmentId, key } = await signRes.json<{ attachmentId: string; key: string }>();
+    await env.MEDIA.put(key, WEBM_BYTES);
+    await post(`/api/attachments/${attachmentId}/complete`, a, {
+      durationMs: 4200,
+      waveform: JSON.stringify([1, 2, 3]),
+    });
+
+    const res = await SELF.fetch(`${BASE}/api/attachments/${attachmentId}/url`, {
+      headers: { Cookie: b },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json<{ durationMs: number | null; waveform: string | null }>();
+    expect(body.durationMs).toBe(4200);
+    expect(body.waveform).not.toBeNull();
+    expect(JSON.parse(body.waveform as string)).toEqual([1, 2, 3]);
+  });
+
   it('GET /:id/url: a stranger gets not-found', async () => {
     const { conversationId, a } = await makeFriendsWithConversation('att-url-stranger');
     const { attachmentId } = await signAndUpload(a, conversationId);

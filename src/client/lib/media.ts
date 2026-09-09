@@ -38,3 +38,59 @@ export async function compressToWebp(
   if (!blob) throw new Error('WebP encode failed');
   return { blob, width, height };
 }
+
+// docs/06 §4: "Voice messages: MediaRecorder(stream, {
+// mimeType:'audio/webm;codecs=opus', audioBitsPerSecond: 32000 }).
+// Feature-detect; fall back to audio/ogg;codecs=opus." Null means neither is
+// supported — the caller falls back to `MediaRecorder`'s own default.
+export const VOICE_MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus'];
+
+export function pickVoiceMimeType(): string | null {
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return null;
+  return VOICE_MIME_CANDIDATES.find((type) => MediaRecorder.isTypeSupported(type)) ?? null;
+}
+
+export const WAVEFORM_BUCKETS = 64;
+
+// Pure half of docs/06 §4's waveform step: "AudioContext.decodeAudioData →
+// 64 RMS buckets → store smallint[]". Unit-testable without a real
+// AudioContext — `waveformFromBlob` below is the impure half a component
+// drives. Each bucket is 0-100 so it stores compactly as `smallint[]` JSON
+// (docs/02 §1) and renders as a plain percentage-height bar.
+export function rmsBuckets(samples: Float32Array, bucketCount: number = WAVEFORM_BUCKETS): number[] {
+  if (samples.length === 0) return new Array(bucketCount).fill(0) as number[];
+  const bucketSize = Math.max(1, Math.floor(samples.length / bucketCount));
+  const buckets: number[] = [];
+  for (let i = 0; i < bucketCount; i++) {
+    const start = i * bucketSize;
+    const end = i === bucketCount - 1 ? samples.length : Math.min(start + bucketSize, samples.length);
+    let sumSquares = 0;
+    let count = 0;
+    for (let j = start; j < end; j++) {
+      const sample = samples[j] ?? 0;
+      sumSquares += sample * sample;
+      count++;
+    }
+    const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0;
+    // Speech RMS rarely approaches 1.0 — a 4x gain keeps quiet recordings
+    // from rendering as a flat line, clamped so louder ones don't clip.
+    buckets.push(Math.round(Math.min(1, rms * 4) * 100));
+  }
+  return buckets;
+}
+
+export async function waveformFromBlob(
+  blob: Blob,
+  decode: (arrayBuffer: ArrayBuffer) => Promise<AudioBuffer> = async (buf) => {
+    const ctx = new AudioContext();
+    try {
+      return await ctx.decodeAudioData(buf);
+    } finally {
+      void ctx.close();
+    }
+  },
+): Promise<number[]> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioBuffer = await decode(arrayBuffer);
+  return rmsBuckets(audioBuffer.getChannelData(0));
+}

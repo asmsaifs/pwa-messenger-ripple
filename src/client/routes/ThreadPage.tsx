@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { CameraCaptureSheet } from '../components/CameraCaptureSheet';
+import { VoiceRecorderSheet } from '../components/VoiceRecorderSheet';
+import { VoiceMessagePlayer } from '../components/VoiceMessagePlayer';
 import { resolveAttachmentUrl, uploadAttachment } from '../lib/attachments';
 import { useConversation, useSetReadMarker } from '../lib/queries/conversations';
 import { useConversationSocket } from '../lib/ws/conversationSocket';
@@ -159,6 +161,7 @@ export function ThreadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraFallbackRef = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
   const rows = useMemo(() => buildRows(messages), [messages]);
 
@@ -226,6 +229,32 @@ export function ThreadPage() {
   function handleCameraCapture(file: File, width: number, height: number) {
     setCameraOpen(false);
     void handleFilePicked(file, { width, height });
+  }
+
+  // docs/09 M11: mirrors handleFilePicked's sign → PUT → complete flow, but
+  // the waveform is computed client-side (docs/06 §4) and travels as the
+  // attachment's `durationMs`/`waveform` metadata rather than image dims.
+  async function handleVoiceSend(file: File, durationMs: number, waveform: number[]) {
+    setVoiceOpen(false);
+    if (!conversationId) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const attachment = await uploadAttachment(conversationId, file, 'voice', {
+        durationMs,
+        waveform: JSON.stringify(waveform),
+      });
+      sendMessage({ clientId: uuidv7(), kind: 'voice', attachmentId: attachment.id });
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? messageForErrorCode(err.code) : 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleVoiceDenied() {
+    setVoiceOpen(false);
+    setUploadError('Ripple needs your mic for voice messages.');
   }
 
   return (
@@ -354,6 +383,8 @@ export function ThreadPage() {
                     <span className="italic opacity-70">Message deleted</span>
                   ) : message.kind === 'file' || message.kind === 'image' ? (
                     <AttachmentBubble message={message} />
+                  ) : message.kind === 'voice' && message.attachmentId ? (
+                    <VoiceMessagePlayer attachmentId={message.attachmentId} own={own} />
                   ) : (
                     message.body
                   )}
@@ -384,6 +415,13 @@ export function ThreadPage() {
         </div>
       </div>
 
+      {voiceOpen ? (
+        <VoiceRecorderSheet
+          onSend={(file, durationMs, waveform) => void handleVoiceSend(file, durationMs, waveform)}
+          onDenied={handleVoiceDenied}
+          onClose={() => setVoiceOpen(false)}
+        />
+      ) : (
       <div className="flex items-end gap-2 border-t border-slate-200 p-3">
         <input
           ref={fileInputRef}
@@ -431,9 +469,11 @@ export function ThreadPage() {
         </button>
         <button
           type="button"
-          disabled
-          className="text-slate-300"
-          aria-label="Record voice message (coming soon)"
+          onClick={() => setVoiceOpen(true)}
+          disabled={uploading}
+          data-testid="voice-button"
+          className="text-slate-500 hover:text-slate-900 disabled:opacity-40"
+          aria-label="Record voice message"
         >
           🎤
         </button>
@@ -464,6 +504,7 @@ export function ThreadPage() {
           Send
         </button>
       </div>
+      )}
     </div>
   );
 }
