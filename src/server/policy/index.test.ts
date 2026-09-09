@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import * as policy from './index';
 import { createPendingAttachment, markAttachmentReady } from '../repos/attachments';
 import { createCall } from '../repos/calls';
+import { createFriendshipRequest, createInvitation } from '../repos/friends';
 import { seedFriendGraph } from '../repos/test-helpers';
 import { AppError } from '../errors';
 
@@ -120,6 +121,28 @@ describe('policy', () => {
     });
   });
 
+  describe('assertCanDeleteFriendship', () => {
+    it('allow: a member cancels a still-pending request', async () => {
+      const row = await createFriendshipRequest(env, g.actorC, g.userA);
+      await expect(
+        policy.assertCanDeleteFriendship(env, g.actorA, row!.id),
+      ).resolves.toBeDefined();
+    });
+
+    it('deny: an accepted friendship must be left via block, not delete', async () => {
+      await expectCode(
+        policy.assertCanDeleteFriendship(env, g.actorA, g.friendshipId),
+        'policy/forbidden',
+      );
+    });
+
+    it('deny: stranger gets not-found', async () => {
+      const row = await createFriendshipRequest(env, g.actorB, g.userC);
+      const stranger = { userId: 'usr_z', sessionId: 's', emailVerified: true };
+      await expectCode(policy.assertCanDeleteFriendship(env, stranger, row!.id), 'policy/not-found');
+    });
+  });
+
   describe('assertCanInviteByEmail', () => {
     it('allow: verified email', () => {
       expect(() => policy.assertCanInviteByEmail(g.actorA)).not.toThrow();
@@ -134,6 +157,41 @@ describe('policy', () => {
         code = err instanceof AppError ? err.code : undefined;
       }
       expect(code).toBe('auth/unverified-email');
+    });
+  });
+
+  describe('assertCanClaimInvitation', () => {
+    it('allow: verified email', () => {
+      expect(() => policy.assertCanClaimInvitation(g.actorA)).not.toThrow();
+    });
+
+    it('deny: unverified email', () => {
+      expect(() => policy.assertCanClaimInvitation(g.actorE)).toThrow(AppError);
+    });
+  });
+
+  describe('assertCanManageInvitation', () => {
+    it('allow: the inviter', async () => {
+      const invitation = await createInvitation(env, g.actorA, {
+        email: 'invitee@example.com',
+        tokenHash: 'policy-test-hash',
+        expiresAt: Date.now() + 60_000,
+      });
+      await expect(
+        policy.assertCanManageInvitation(env, g.actorA, invitation!.id),
+      ).resolves.toBeDefined();
+    });
+
+    it('deny: not the inviter gets not-found', async () => {
+      const invitation = await createInvitation(env, g.actorA, {
+        email: 'invitee2@example.com',
+        tokenHash: 'policy-test-hash-2',
+        expiresAt: Date.now() + 60_000,
+      });
+      await expectCode(
+        policy.assertCanManageInvitation(env, g.actorB, invitation!.id),
+        'policy/not-found',
+      );
     });
   });
 

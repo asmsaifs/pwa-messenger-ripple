@@ -32,6 +32,11 @@ export function signUpEmail(input: {
   password: string;
   name: string;
   captchaResponse?: string;
+  // Better Auth redirects here (with the session cookie already set, since
+  // `autoSignInAfterVerification` is on) once the verification link is
+  // clicked — used to land an invite claim on /invite/claim (docs/03 "Auth"
+  // ?invite= flow; see ClaimInvitePage).
+  callbackURL?: string;
 }): Promise<void> {
   const { captchaResponse, ...body } = input;
   return authFetch('/sign-up/email', body, captchaResponse);

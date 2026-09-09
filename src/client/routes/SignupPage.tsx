@@ -26,6 +26,7 @@ export function SignupPage() {
       email,
       password,
       ...(captchaToken ? { captchaResponse: captchaToken } : {}),
+      ...(invite ? { callbackURL: `/invite/claim?token=${encodeURIComponent(invite)}` } : {}),
     })
       .then(() => setSubmitted(true))
       .catch((err: unknown) => {

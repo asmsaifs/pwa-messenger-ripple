@@ -9,6 +9,7 @@ import { LoginPage } from '../routes/LoginPage';
 import { SignupPage } from '../routes/SignupPage';
 import { ResetPage } from '../routes/ResetPage';
 import { ResetConfirmPage } from '../routes/ResetConfirmPage';
+import { ClaimInvitePage } from '../routes/ClaimInvitePage';
 import { InvitePreviewPage } from '../routes/InvitePreviewPage';
 import { ChatsIndexPage } from '../routes/ChatsIndexPage';
 import { ThreadPage } from '../routes/ThreadPage';
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
     element: <RequireAuth />,
     children: [
       { path: '/call/:callId', element: <CallPage /> },
+      { path: '/invite/claim', element: <ClaimInvitePage /> },
       {
         element: <AppLayout />,
         children: [

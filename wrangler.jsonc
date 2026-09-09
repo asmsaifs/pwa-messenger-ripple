@@ -32,4 +32,22 @@
       "id": "72298198f66845388ed5f2a3c7fce356",
     },
   ],
+
+  // RateLimiterDO (M5, docs/02 §3) — abuse controls (docs/05 §8): invite
+  // sends (10/day), invite resends (1/24h), later reused for turn-credential
+  // and other per-user limits.
+  "durable_objects": {
+    "bindings": [{ "name": "RATE_LIMITER", "class_name": "RateLimiterDO" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] }],
+
+  // Cloudflare Email Sending (M5) — invite emails. No `send_email` binding
+  // here yet: the pinned wrangler/Miniflare version in this repo (3.114.17)
+  // doesn't support it (adding it made every local worker fail to boot with
+  // "internal error" — reproduced, not assumed). src/server/lib/mail.ts's
+  // `sendInviteEmail` already checks for `env.EMAIL` and falls back to a
+  // console-log "local mail catcher" when it's absent, so invites still work
+  // end-to-end locally. Add `"send_email": [{ "name": "EMAIL" }]` here once
+  // wrangler is upgraded (`npm install --save-dev wrangler@4`) and the domain
+  // is onboarded via `wrangler email sending enable <domain>` (docs/08).
 }

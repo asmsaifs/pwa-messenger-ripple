@@ -9,9 +9,10 @@
 //   (docs/02 §5 enumeration rule) — the one exception is the blocked case
 //   *inside* a conversation the actor is already a member of, which is
 //   `policy/blocked` because membership already proved the row's existence.
-// - Rate limiting (RateLimiterDO) lands in M5; the matrix's "rate limit
-//   passes" clauses are not enforced here yet — callers must not treat an
-//   allow from these functions as a rate-limit pass.
+// - Rate limiting (RateLimiterDO, M5) is enforced by callers (routes), not
+//   here — an allow from a function in this file is never itself a
+//   rate-limit pass. See src/server/lib/rate-limit.ts and
+//   src/server/routes/friends.ts's `/invite` handler.
 import { AppError, blocked, forbidden, notFound } from '../errors';
 import * as attachmentsRepo from '../repos/attachments';
 import * as callsRepo from '../repos/calls';
@@ -105,9 +106,45 @@ export async function assertCanUnblockFriendship(
   return friendship;
 }
 
+// Withdraw/reject a request (docs/03 `DELETE /api/friends/:id`) — a member
+// may cancel it while it's still pending, but not once it's been accepted;
+// leaving an accepted friendship goes through block instead (docs/02 §5 has
+// no separate "unfriend" row — block is the one exit path once accepted).
+export async function assertCanDeleteFriendship(
+  env: Env,
+  actor: Actor,
+  friendshipId: string,
+) {
+  const friendship = await loadFriendshipForMember(env, actor, friendshipId);
+  if (friendship.status === 'accepted') {
+    forbidden('use block to leave an accepted friendship');
+  }
+  return friendship;
+}
+
 // ── Invitations ─────────────────────────────────────────────────────────
 export function assertCanInviteByEmail(actor: Actor) {
   assertVerifiedEmail(actor);
+}
+
+// Claiming completes the invite side of docs/03 "Auth" (§ signup ?invite=)
+// — the invitee must also clear the verified-email gate every other
+// invite/message/call action requires (docs/05 §2).
+export function assertCanClaimInvitation(actor: Actor) {
+  assertVerifiedEmail(actor);
+}
+
+// Resend/revoke (docs/03 `POST /api/invites/:id/resend`, `DELETE
+// /api/invites/:id`) are inviter-only — enumeration rule applies the same as
+// everywhere else: anyone else's invitation id is `policy/not-found`.
+export async function assertCanManageInvitation(
+  env: Env,
+  actor: Actor,
+  invitationId: string,
+) {
+  const invitation = await friendsRepo.getInvitationById(env, invitationId);
+  if (!invitation || invitation.inviterId !== actor.userId) notFound();
+  return invitation;
 }
 
 // ── Conversations ───────────────────────────────────────────────────────

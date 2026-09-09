@@ -15,4 +15,10 @@ export interface Env {
   // the captcha plugin only activates when this is set, so local dev/tests
   // don't need a live Turnstile account.
   TURNSTILE_SECRET?: string;
+  // RateLimiterDO (M5, docs/02 §3) — abuse controls (docs/05 §8).
+  RATE_LIMITER: DurableObjectNamespace<import('../durable/RateLimiterDO').RateLimiterDO>;
+  // Cloudflare Email Sending (M5) — invite emails. Optional: the `from`
+  // domain isn't onboarded in every env (docs/08), so local dev/tests still
+  // typecheck and fall back to a log line in src/server/lib/mail.ts.
+  EMAIL?: SendEmail;
 }

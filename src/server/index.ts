@@ -3,9 +3,15 @@ import { ZodError } from 'zod';
 import { AppError, toErrorResponse } from './errors';
 import { createAuth } from './lib/auth';
 import { csrfProtection } from './middleware/csrf';
+import { friendsRoute } from './routes/friends';
 import { healthRoute } from './routes/health';
+import { invitesRoute } from './routes/invites';
 import { meRoute } from './routes/me';
 import type { Env } from './env';
+
+// Workers requires every Durable Object class referenced in wrangler.jsonc's
+// bindings to be exported from the main module (CLAUDE.md hard rule 9).
+export { RateLimiterDO } from '../durable/RateLimiterDO';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -37,6 +43,8 @@ app.onError((err, c) => {
 
 app.route('/api/health', healthRoute);
 app.route('/api/me', meRoute);
+app.route('/api/friends', friendsRoute);
+app.route('/api/invites', invitesRoute);
 
 // Fallback for anything not handled above: hand off to Workers Static Assets,
 // which serves index.html for unmatched paths (SPA client-side routing) per

@@ -59,5 +59,8 @@ export async function apiFetch<T>(
     throw new ApiError('internal', `Request failed with status ${res.status}`);
   }
 
+  // 204 (every friends/invites action route, docs/03) has no body to parse —
+  // `res.json()` would throw on the empty string.
+  if (res.status === 204) return schema.parse(undefined);
   return schema.parse(await res.json());
 }
