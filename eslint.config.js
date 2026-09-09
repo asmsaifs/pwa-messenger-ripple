@@ -68,6 +68,16 @@ export default tseslint.config(
     },
   },
 
+  // Service worker (src/sw.ts) — its own global scope, not the client bundle
+  // or the API Worker's.
+  {
+    files: ['src/sw.ts'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.serviceworker,
+    },
+  },
+
   // Shared (isomorphic — no DOM, no Worker globals assumed)
   {
     files: ['src/shared/**/*.ts'],
