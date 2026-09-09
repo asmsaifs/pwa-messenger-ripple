@@ -18,6 +18,7 @@
     "format:check": "prettier --check .",
     "pretest": "mkdir -p dist/client",
     "test": "vitest run",
+    "guard:policy": "bash scripts/check-policy-imports.sh",
     "test:watch": "vitest",
     "preview": "vite preview",
     "cf-typegen": "wrangler types",

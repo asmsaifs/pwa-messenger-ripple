@@ -11,12 +11,12 @@ describe('conversations repo', () => {
     ({ userA, userB, userC } = await seedUsers(env));
     const request = await createFriendshipRequest(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       userB,
     );
     const { conversation } = await acceptFriendship(
       env,
-      { userId: userB, sessionId: 's' },
+      { userId: userB, sessionId: 's', emailVerified: true },
       request!.id,
     );
     conversationId = conversation!.id;
@@ -25,7 +25,7 @@ describe('conversations repo', () => {
   it('returns the conversation for a member', async () => {
     const row = await getConversation(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       conversationId,
     );
     expect(row?.id).toBe(conversationId);
@@ -34,17 +34,22 @@ describe('conversations repo', () => {
   it('returns undefined for a non-member — never leaks existence', async () => {
     const row = await getConversation(
       env,
-      { userId: userC, sessionId: 's' },
+      { userId: userC, sessionId: 's', emailVerified: true },
       conversationId,
     );
     expect(row).toBeUndefined();
   });
 
   it('last_read_seq only moves forward', async () => {
-    await setLastReadSeq(env, { userId: userA, sessionId: 's' }, conversationId, 5);
+    await setLastReadSeq(
+      env,
+      { userId: userA, sessionId: 's', emailVerified: true },
+      conversationId,
+      5,
+    );
     const stale = await setLastReadSeq(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       conversationId,
       2,
     );
@@ -52,7 +57,7 @@ describe('conversations repo', () => {
 
     const advanced = await setLastReadSeq(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       conversationId,
       9,
     );

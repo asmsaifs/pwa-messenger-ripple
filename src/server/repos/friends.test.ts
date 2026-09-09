@@ -19,7 +19,7 @@ describe('friends repo', () => {
   it('stores one row per pair in canonical order regardless of request direction', async () => {
     const row = await createFriendshipRequest(
       env,
-      { userId: userB, sessionId: 's' },
+      { userId: userB, sessionId: 's', emailVerified: true },
       userA,
     );
     expect(row?.userA).toBe(userA);
@@ -28,7 +28,7 @@ describe('friends repo', () => {
 
     const fromEitherSide = await getFriendshipWith(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       userB,
     );
     expect(fromEitherSide?.id).toBe(row?.id);
@@ -36,30 +36,38 @@ describe('friends repo', () => {
 
   it('rejects self-friending', async () => {
     await expect(
-      createFriendshipRequest(env, { userId: userA, sessionId: 's' }, userA),
+      createFriendshipRequest(
+        env,
+        { userId: userA, sessionId: 's', emailVerified: true },
+        userA,
+      ),
     ).rejects.toThrow();
   });
 
   it('the requester cannot accept their own request', async () => {
     const row = await createFriendshipRequest(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       userB,
     );
     await expect(
-      acceptFriendship(env, { userId: userA, sessionId: 's' }, row!.id),
+      acceptFriendship(
+        env,
+        { userId: userA, sessionId: 's', emailVerified: true },
+        row!.id,
+      ),
     ).rejects.toThrow();
   });
 
   it('accepting creates a conversation with both members', async () => {
     const row = await createFriendshipRequest(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       userB,
     );
     const { friendship, conversation } = await acceptFriendship(
       env,
-      { userId: userB, sessionId: 's' },
+      { userId: userB, sessionId: 's', emailVerified: true },
       row!.id,
     );
     expect(friendship.status).toBe('accepted');
@@ -69,33 +77,45 @@ describe('friends repo', () => {
   it('a stranger cannot accept a request between two other users', async () => {
     const row = await createFriendshipRequest(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       userB,
     );
     await expect(
-      acceptFriendship(env, { userId: userC, sessionId: 's' }, row!.id),
+      acceptFriendship(
+        env,
+        { userId: userC, sessionId: 's', emailVerified: true },
+        row!.id,
+      ),
     ).rejects.toThrow();
   });
 
   it('only the blocker can unblock', async () => {
     const row = await createFriendshipRequest(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       userB,
     );
-    await acceptFriendship(env, { userId: userB, sessionId: 's' }, row!.id);
-    await blockFriendship(env, { userId: userA, sessionId: 's' }, row!.id);
+    await acceptFriendship(
+      env,
+      { userId: userB, sessionId: 's', emailVerified: true },
+      row!.id,
+    );
+    await blockFriendship(
+      env,
+      { userId: userA, sessionId: 's', emailVerified: true },
+      row!.id,
+    );
 
     const deniedAttempt = await unblockFriendship(
       env,
-      { userId: userB, sessionId: 's' },
+      { userId: userB, sessionId: 's', emailVerified: true },
       row!.id,
     );
     expect(deniedAttempt).toBeUndefined();
 
     const allowed = await unblockFriendship(
       env,
-      { userId: userA, sessionId: 's' },
+      { userId: userA, sessionId: 's', emailVerified: true },
       row!.id,
     );
     expect(allowed?.status).toBe('accepted');

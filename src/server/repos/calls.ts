@@ -1,4 +1,4 @@
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { getDb } from './db';
 import { calls } from './schema';
 import { uuidv7 } from '../../shared/id';
@@ -57,6 +57,19 @@ export async function updateCallStatus(
     )
     .returning();
   return row;
+}
+
+// "no other ringing/active call for actor" (docs/02 §5 "start call") — checked
+// as the caller side; the callee side is the same query with the other id.
+export async function hasOpenCall(env: Env, userId: string) {
+  const db = getDb(env);
+  const row = await db.query.calls.findFirst({
+    where: and(
+      or(eq(calls.callerId, userId), eq(calls.calleeId, userId)),
+      inArray(calls.status, ['ringing', 'active']),
+    ),
+  });
+  return row !== undefined;
 }
 
 export async function getCall(env: Env, actor: Actor, id: string) {

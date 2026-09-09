@@ -30,9 +30,10 @@ export async function createProfile(env: Env, actor: Actor, input: CreateProfile
 }
 
 // Read is not self-scoped: docs/02 §5 allows self or an accepted-friend read.
-// Callers must run `assertFriends` (M2) before calling this for anyone else.
+// Callers must run `policy.assertProfileReadable` before calling this for
+// anyone else — this function trusts that it already ran.
 export async function getProfile(env: Env, actor: Actor, userId: string) {
-  void actor; // threaded through per the actor-first convention; policy check lands in M2
+  void actor; // threaded through per the actor-first convention; caller re-checks via policy
   const db = getDb(env);
   return db.query.profiles.findFirst({ where: eq(profiles.userId, userId) });
 }

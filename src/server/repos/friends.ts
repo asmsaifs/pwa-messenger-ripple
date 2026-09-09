@@ -37,6 +37,11 @@ export async function createFriendshipRequest(
   return row;
 }
 
+export async function getFriendshipById(env: Env, friendshipId: string) {
+  const db = getDb(env);
+  return db.query.friendships.findFirst({ where: eq(friendships.id, friendshipId) });
+}
+
 export async function getFriendshipWith(env: Env, actor: Actor, otherUserId: string) {
   const db = getDb(env);
   const [userA, userB] = canonicalPair(actor.userId, otherUserId);

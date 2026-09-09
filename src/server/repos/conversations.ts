@@ -1,6 +1,6 @@
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, lt, ne } from 'drizzle-orm';
 import { getDb } from './db';
-import { conversationMembers, conversations } from './schema';
+import { conversationMembers, conversations, friendships } from './schema';
 import type { Env } from '../env';
 import type { Actor } from '../types';
 
@@ -19,6 +19,33 @@ export async function getConversation(env: Env, actor: Actor, conversationId: st
   return db.query.conversations.findFirst({
     where: eq(conversations.id, conversationId),
   });
+}
+
+// The friendship a conversation was created from — policy needs its `status`
+// to decide whether messaging/calling is still allowed (docs/02 §5).
+export async function getConversationFriendship(env: Env, conversationId: string) {
+  const db = getDb(env);
+  const conversation = await db.query.conversations.findFirst({
+    where: eq(conversations.id, conversationId),
+  });
+  if (!conversation) return undefined;
+  return db.query.friendships.findFirst({
+    where: eq(friendships.id, conversation.friendshipId),
+  });
+}
+
+// The other member of a (1:1, v1) conversation — used by policy to resolve
+// which friendship/presence applies to "the peer" without trusting a client-
+// supplied id.
+export async function getOtherMember(env: Env, conversationId: string, userId: string) {
+  const db = getDb(env);
+  const row = await db.query.conversationMembers.findFirst({
+    where: and(
+      eq(conversationMembers.conversationId, conversationId),
+      ne(conversationMembers.userId, userId),
+    ),
+  });
+  return row?.userId;
 }
 
 export async function listConversationsForUser(env: Env, actor: Actor) {

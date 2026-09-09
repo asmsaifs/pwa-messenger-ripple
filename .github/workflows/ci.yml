@@ -31,9 +31,11 @@ jobs:
       - name: unit + worker tests
         run: pnpm test
 
+      - name: route-policy coverage guard
+        run: pnpm guard:policy
+
       - name: build
         run: pnpm build
 
-  # M1+ adds: worker (policy/DO/API suites against local D1), guards (route-policy
-  # coverage, bundle-size budget, no-drizzle-outside-repos grep), e2e (Playwright
-  # against wrangler dev), perf (Lighthouse CI), deploy (main only) — see docs/07 §6.
+  # M6+ adds: DO suites, bundle-size budget guard, e2e (Playwright against
+  # wrangler dev), perf (Lighthouse CI), deploy (main only) — see docs/07 §6.

@@ -27,20 +27,20 @@ describe('profiles repo', () => {
   });
 
   it('creates and reads back a profile', async () => {
-    const actor = { userId: 'usr_a', sessionId: 's' };
+    const actor = { userId: 'usr_a', sessionId: 's', emailVerified: true };
     await createProfile(env, actor, { displayName: 'Alice' });
     const row = await getProfile(env, actor, 'usr_a');
     expect(row?.displayName).toBe('Alice');
   });
 
   it('rejects an empty display name via the D1 CHECK constraint', async () => {
-    const actor = { userId: 'usr_a', sessionId: 's' };
+    const actor = { userId: 'usr_a', sessionId: 's', emailVerified: true };
     await expect(createProfile(env, actor, { displayName: '' })).rejects.toThrow();
   });
 
   it("update only ever touches the caller's own row", async () => {
-    const actorA = { userId: 'usr_a', sessionId: 's' };
-    const actorB = { userId: 'usr_b', sessionId: 's' };
+    const actorA = { userId: 'usr_a', sessionId: 's', emailVerified: true };
+    const actorB = { userId: 'usr_b', sessionId: 's', emailVerified: true };
     await createProfile(env, actorA, { displayName: 'Alice' });
     await createProfile(env, actorB, { displayName: 'Bob' });
 

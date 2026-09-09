@@ -13,8 +13,9 @@ export type CreateAttachmentInput = {
   originalName?: string;
 };
 
-// The full "member + quota" check is a policy concern (M2); this repo only
-// guarantees the row is attributed to the actual caller, never a spoofed id.
+// The full "member + quota" check is `policy.assertCanSignAttachmentUpload`;
+// this repo only guarantees the row is attributed to the actual caller, never
+// a spoofed id.
 export async function createPendingAttachment(
   env: Env,
   actor: Actor,
@@ -50,7 +51,7 @@ export async function markAttachmentReady(
     .set({ status: 'ready', ...meta })
     .where(eq(attachments.id, id))
     .returning();
-  void actor; // uploader/member re-check lands with the policy layer (M2)
+  void actor; // caller re-checks uploader/member via policy before this runs
   return row;
 }
 
