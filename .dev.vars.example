@@ -1,0 +1,2 @@
+# Copy to .dev.vars (gitignored) for local `wrangler dev`.
+# M0 has no secrets yet — populated as later milestones add them (see docs/08-DEPLOYMENT.md §3).

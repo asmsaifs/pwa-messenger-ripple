@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ripple",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+  },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // M0 scope only: static assets + Hono API skeleton. D1 / DO / R2 / KV / Queues /
+  // Email bindings are added in the milestones that introduce them (see docs/09-ROADMAP.md)
+  // so wrangler dev never points at infrastructure the code doesn't use yet.
+  "vars": { "APP_ENV": "local", "APP_BASE_URL": "http://localhost:8787" },
+}

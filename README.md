@@ -1,26 +1,32 @@
 # Ripple
 
-Installable PWA for 1:1 voice calls, text chat, files, camera photos, and voice messages — built for Chrome OS.
+PWA voice-chat app for Chrome OS, running entirely on Cloudflare.
 
-Runs entirely on Cloudflare: Workers + Durable Objects + D1 + R2 + Queues.
-
-## Status
-Planning complete. Implementation follows the milestones in [docs/09-ROADMAP.md](docs/09-ROADMAP.md).
-
-## Docs
-| Doc | Contents |
-|---|---|
-| [00-PRD](docs/00-PRD.md) | scope, requirements, risks |
-| [01-ARCHITECTURE](docs/01-ARCHITECTURE.md) | stack, diagrams, runtime flows |
-| [02-DATA-MODEL](docs/02-DATA-MODEL.md) | D1 schema, DO SQLite, authorization matrix, R2, IndexedDB |
-| [03-API-CONTRACTS](docs/03-API-CONTRACTS.md) | Edge Functions, Realtime channels, signaling protocol |
-| [04-UX-FLOWS](docs/04-UX-FLOWS.md) | routes, screens, permissions, a11y |
-| [05-SECURITY](docs/05-SECURITY.md) | threat model, CSP, WebRTC risks, checklist |
-| [06-PWA-CHROMEOS](docs/06-PWA-CHROMEOS.md) | manifest, service worker, Chrome OS quirks, audio |
-| [07-TESTING](docs/07-TESTING.md) | test pyramid, policy tests, DO tests, WebRTC E2E, CI |
-| [08-DEPLOYMENT](docs/08-DEPLOYMENT.md) | environments, runbooks, cost, ops |
-| [09-ROADMAP](docs/09-ROADMAP.md) | 14 milestones with exit criteria |
-| [10-VIBE-CODING-PLAYBOOK](docs/10-VIBE-CODING-PLAYBOOK.md) | how to drive the build with an agent |
+**`docs/` is the spec — read it before writing code.** See `CLAUDE.md` for the
+build rules and `docs/09-ROADMAP.md` for the milestone plan.
 
 ## Quick start
-See [docs/08 §3](docs/08-DEPLOYMENT.md).
+
+```bash
+corepack enable && pnpm install
+pnpm cf-typegen      # generate Worker binding types from wrangler.jsonc
+pnpm dev             # vite (5173) + wrangler dev (8787), Vite proxies /api → 8787
+```
+
+## Commands
+
+```bash
+pnpm dev            # vite + wrangler dev
+pnpm build           pnpm typecheck      pnpm lint
+pnpm test            pnpm format:check
+pnpm cf-typegen      # regenerate worker-configuration.d.ts after editing wrangler.jsonc
+```
+
+## Status
+
+**M0 — Repo & toolchain** complete: Vite + React 19 + TS strict + Tailwind 4 +
+shadcn/ui on the client, Hono on Workers + Static Assets serving the SPA,
+`@cloudflare/vitest-pool-workers` wired for server tests, ESLint layering
+rules (drizzle/`env.DB` restricted to `src/server/repos/**`, added ahead of
+M1), CI skeleton. See `docs/09-ROADMAP.md` for what's next (M1: D1 schema +
+repos).

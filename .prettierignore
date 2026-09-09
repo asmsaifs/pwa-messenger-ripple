@@ -1,0 +1,9 @@
+dist
+.wrangler
+node_modules
+pnpm-lock.yaml
+
+# docs/ is the spec (see CLAUDE.md) — leave prose formatting to its authors
+docs/
+CLAUDE.md
+README.md

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: typecheck
+        run: pnpm typecheck
+
+      - name: lint
+        run: pnpm lint
+
+      - name: format check
+        run: pnpm format:check
+
+      - name: unit + worker tests
+        run: pnpm test
+
+      - name: build
+        run: pnpm build
+
+  # M1+ adds: worker (policy/DO/API suites against local D1), guards (route-policy
+  # coverage, bundle-size budget, no-drizzle-outside-repos grep), e2e (Playwright
+  # against wrangler dev), perf (Lighthouse CI), deploy (main only) — see docs/07 §6.
