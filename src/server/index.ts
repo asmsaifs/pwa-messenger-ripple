@@ -16,6 +16,7 @@ import type { Env } from './env';
 // bindings to be exported from the main module (CLAUDE.md hard rule 9).
 export { RateLimiterDO } from '../durable/RateLimiterDO';
 export { ConversationDO } from '../durable/ConversationDO';
+export { UserDO } from '../durable/UserDO';
 
 const app = new Hono<{ Bindings: Env }>();
 

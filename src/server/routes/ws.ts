@@ -31,3 +31,18 @@ wsRoute.get('/conversation/:id', async (c) => {
   const stub = c.env.CONVERSATION.get(c.env.CONVERSATION.idFromName(id));
   return stub.fetch(forwarded);
 });
+
+// GET /api/ws/user — the personal socket (docs/01 §6, docs/03 §2.2), one per
+// device, open for the whole session. Always self-scoped (no `:id` param, no
+// separate policy assertion): `requireAuth` already proved who `actor` is,
+// and that's the only identity this socket ever represents.
+wsRoute.get('/user', async (c) => {
+  const actor = c.get('actor');
+
+  const forwardedUrl = new URL(c.req.url);
+  forwardedUrl.searchParams.set('actorUserId', actor.userId);
+  const forwarded = new Request(forwardedUrl, c.req.raw);
+
+  const stub = c.env.USER.get(c.env.USER.idFromName(actor.userId));
+  return stub.fetch(forwarded);
+});

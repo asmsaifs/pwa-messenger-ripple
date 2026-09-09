@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { InstallButton } from '../components/InstallButton';
 import { useMe } from '../lib/queries/me';
+import { useUserSocket } from '../lib/ws/userSocket';
 
 const NAV_LINKS = [
   { to: '/chats', label: 'Chats' },
@@ -15,10 +16,19 @@ const NAV_LINKS = [
 // (ChatShellLayout) — this level only owns the chrome shared by every screen.
 export function AppLayout() {
   const me = useMe();
+  // UserDO's personal socket (docs/09 M7) — mounted once for the whole
+  // authenticated session, not per-thread like useConversationSocket.
+  const { showReconnecting } = useUserSocket(Boolean(me.data));
+  const unreadTotal = me.data?.unreadTotal ?? 0;
 
   return (
     <div className="flex min-h-dvh flex-col bg-white">
       <OfflineBanner />
+      {showReconnecting && (
+        <div role="status" className="w-full bg-slate-100 px-4 py-1 text-center text-xs text-slate-600">
+          Reconnecting…
+        </div>
+      )}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4">
         <div className="flex items-center gap-6">
           <span className="text-sm font-semibold">Ripple</span>
@@ -28,10 +38,18 @@ export function AppLayout() {
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
-                  cn('text-slate-500 hover:text-slate-900', isActive && 'font-medium text-slate-900')
+                  cn('relative text-slate-500 hover:text-slate-900', isActive && 'font-medium text-slate-900')
                 }
               >
                 {link.label}
+                {link.to === '/chats' && unreadTotal > 0 && (
+                  <span
+                    data-testid="nav-unread-badge"
+                    className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white"
+                  >
+                    {unreadTotal > 9 ? '9+' : unreadTotal}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>

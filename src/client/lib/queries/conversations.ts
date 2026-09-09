@@ -16,11 +16,10 @@ export function useConversations() {
     queryKey: conversationsQueryKey,
     queryFn: () => apiFetch('/api/conversations', conversationsListResponseSchema),
     staleTime: 5_000,
-    // Live cross-conversation updates (a new message arriving while this
-    // list is open) are UserDO's job (M7, docs/09) — until then, a short
-    // poll keeps unread counts/previews from going stale while the list is
-    // on screen, without wiring a second socket just for this milestone.
-    refetchInterval: 5_000,
+    // UserDO's `unread` push (docs/09 M7, src/client/lib/ws/userSocket.ts)
+    // keeps `unreadCount` current in real time; this poll is just a safety
+    // net for previews/new rows while the personal socket is reconnecting.
+    refetchInterval: 30_000,
   });
 }
 

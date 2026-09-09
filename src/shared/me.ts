@@ -7,9 +7,9 @@ export const profileSchema = z.object({
   statusText: z.string().max(140).nullable(),
 });
 
-// GET /api/me (docs/03). `unreadTotal` isn't included yet — it's computed
-// from UserDO's per-conversation state, which lands in M7; adding it here as
-// a hardcoded 0 would just be a value to un-lie about later.
+// GET /api/me (docs/03). `unreadTotal` comes from UserDO's per-conversation
+// state (M7) — summed server-side in `UserDO.unreadTotal`, not recomputed
+// from D1, so it agrees with the push-based `unread` WS frame.
 export const meResponseSchema = z.object({
   user: z.object({
     id: z.string(),
@@ -17,6 +17,7 @@ export const meResponseSchema = z.object({
     emailVerified: z.boolean(),
   }),
   profile: profileSchema,
+  unreadTotal: z.number().int().nonnegative(),
 });
 
 export type MeResponse = z.infer<typeof meResponseSchema>;

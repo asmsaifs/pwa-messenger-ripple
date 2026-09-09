@@ -90,8 +90,14 @@ function ConversationListPane() {
                   <div className="flex size-10 items-center justify-center rounded-full bg-slate-200 text-sm font-medium text-slate-600">
                     {conversation.peerDisplayName.slice(0, 1).toUpperCase()}
                   </div>
-                  {/* presence dot stubbed 'online' pending UserDO (M7) */}
-                  <span className="absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                  <span
+                    className={cn(
+                      'absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-white',
+                      conversation.peerPresence === 'online' && 'bg-emerald-500',
+                      conversation.peerPresence === 'away' && 'bg-amber-400',
+                      conversation.peerPresence === 'offline' && 'bg-slate-300',
+                    )}
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">

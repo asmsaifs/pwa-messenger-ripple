@@ -72,6 +72,20 @@ export async function hasOpenCall(env: Env, userId: string) {
   return row !== undefined;
 }
 
+// Non-actor: called by UserDO's `activeCall` RPC (docs/03 §3), which has no
+// session/Actor at the DO layer — only the userId pinned into the WS
+// attachment at connect time, same trust boundary as ConversationDO's
+// `getMembershipStatus`.
+export async function getOpenCall(env: Env, userId: string) {
+  const db = getDb(env);
+  return db.query.calls.findFirst({
+    where: and(
+      or(eq(calls.callerId, userId), eq(calls.calleeId, userId)),
+      inArray(calls.status, ['ringing', 'active']),
+    ),
+  });
+}
+
 export async function getCall(env: Env, actor: Actor, id: string) {
   const db = getDb(env);
   return db.query.calls.findFirst({

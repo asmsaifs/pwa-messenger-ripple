@@ -3,11 +3,15 @@ import { z } from 'zod';
 // GET /api/conversations row (docs/03). `unreadCount` is derivable purely
 // from D1 (`lastSeq - lastReadSeq`, both already columns) — the per-row pill
 // doesn't need UserDO; only the cross-conversation nav badge does (M7).
+// `peerPresence` is UserDO's global online/away/offline state (docs/01 §6,
+// M7) — distinct from ConversationDO's per-conversation `typing`/`presence`
+// broadcast, which only exists while a thread's own socket is open.
 export const conversationSummarySchema = z.object({
   id: z.string(),
   peerId: z.string(),
   peerDisplayName: z.string(),
   peerAvatarKey: z.string().nullable(),
+  peerPresence: z.enum(['online', 'away', 'offline']),
   lastMessageAt: z.number().nullable(),
   lastMessagePreview: z.string().nullable(),
   lastMessageSender: z.string().nullable(),

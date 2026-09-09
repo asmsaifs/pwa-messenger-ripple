@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/actor';
 import { conversationStub } from '../lib/conversation-do';
+import { userStub } from '../lib/user-do';
 import * as policy from '../policy';
 import * as conversationsRepo from '../repos/conversations';
 import * as profilesRepo from '../repos/profiles';
@@ -34,12 +35,14 @@ function toSummary(row: {
   membership: { lastReadSeq: number; mutedUntil: number | null };
   peerUserId: string;
   peerProfile?: { displayName: string; avatarKey: string | null } | undefined;
+  peerPresence: 'online' | 'away' | 'offline';
 }): ConversationSummary {
   return {
     id: row.conversation.id,
     peerId: row.peerUserId,
     peerDisplayName: row.peerProfile?.displayName ?? 'Unknown',
     peerAvatarKey: row.peerProfile?.avatarKey ?? null,
+    peerPresence: row.peerPresence,
     lastMessageAt: row.conversation.lastMessageAt,
     lastMessagePreview: row.conversation.lastMessagePreview,
     lastMessageSender: row.conversation.lastMessageSender,
@@ -53,8 +56,15 @@ function toSummary(row: {
 conversationsRoute.get('/', async (c) => {
   const actor = c.get('actor');
   const rows = await conversationsRepo.listConversationsForUserWithDetails(c.env, actor);
+  const presenceByPeer = new Map(
+    await Promise.all(
+      rows.map(async (row) => [row.peerUserId, (await userStub(c.env, row.peerUserId).presence()).state] as const),
+    ),
+  );
   const body = conversationsListResponseSchema.parse({
-    conversations: rows.map(toSummary),
+    conversations: rows.map((row) =>
+      toSummary({ ...row, peerPresence: presenceByPeer.get(row.peerUserId) ?? 'offline' }),
+    ),
   });
   return c.json(body);
 });
@@ -68,11 +78,14 @@ conversationsRoute.get('/:id', async (c) => {
     conversationsRepo.getOtherMember(c.env, id, actor.userId),
   ]);
   if (!membership || !peerUserId) throw new Error('member without a membership/peer row');
-  const peerProfile = await profilesRepo.getProfile(c.env, actor, peerUserId);
+  const [peerProfile, peerPresence] = await Promise.all([
+    profilesRepo.getProfile(c.env, actor, peerUserId),
+    userStub(c.env, peerUserId).presence(),
+  ]);
   if (!peerProfile) throw new Error('conversation peer without a profile');
 
   const body = conversationDetailResponseSchema.parse({
-    conversation: toSummary({ conversation, membership, peerUserId, peerProfile }),
+    conversation: toSummary({ conversation, membership, peerUserId, peerProfile, peerPresence: peerPresence.state }),
     peer: {
       userId: peerUserId,
       displayName: peerProfile.displayName,
@@ -128,6 +141,9 @@ conversationsRoute.post('/:id/read', async (c) => {
   policy.assertCanSetReadMarker();
   const { seq } = setReadMarkerSchema.parse(await c.req.json());
   await conversationsRepo.setLastReadSeq(c.env, actor, id, seq);
+  // Zeroes UserDO's per-conversation count and pushes it to every open tab
+  // (docs/09 M7 exit criterion: "unread badge accurate across two tabs").
+  await userStub(c.env, actor.userId).clearUnread(id);
   return c.body(null, 204);
 });
 

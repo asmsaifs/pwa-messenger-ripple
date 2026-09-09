@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/actor';
+import { userStub } from '../lib/user-do';
 import * as policy from '../policy';
 import * as profilesRepo from '../repos/profiles';
 import { meResponseSchema, updateMeSchema } from '../../shared/me';
@@ -19,7 +20,10 @@ meRoute.get('/', async (c) => {
   const authUser = c.get('authUser');
   await policy.assertProfileReadable(c.env, actor, actor.userId);
 
-  const profile = await profilesRepo.getProfile(c.env, actor, actor.userId);
+  const [profile, unreadTotal] = await Promise.all([
+    profilesRepo.getProfile(c.env, actor, actor.userId),
+    userStub(c.env, actor.userId).unreadTotal(),
+  ]);
   if (!profile) throw new Error('profile missing for authenticated user'); // bootstrapped on signup — should never happen
 
   const body = meResponseSchema.parse({
@@ -30,6 +34,7 @@ meRoute.get('/', async (c) => {
       avatarKey: profile.avatarKey,
       statusText: profile.statusText,
     },
+    unreadTotal,
   });
   return c.json(body);
 });

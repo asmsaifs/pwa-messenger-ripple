@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { AppError } from '../server/errors';
 import { takeRateLimit } from '../server/lib/rate-limit';
+import { userStub } from '../server/lib/user-do';
 import * as conversationsRepo from '../server/repos/conversations';
 import {
   clientFrameSchema,
@@ -451,8 +452,30 @@ export class ConversationDO extends DurableObject<Env> {
 
     const message = rowToMessage(row);
     this.broadcast({ t: 'message', message });
+    await this.notifyUnread(this.conversationId, input.senderId);
     await this.ctx.storage.setAlarm(Date.now() + PREVIEW_FLUSH_DEBOUNCE_MS);
     return message;
+  }
+
+  // Fan-in to UserDO (docs/01 §5's "reach a user without knowing their
+  // sockets" path) so a member's other open tabs/devices see the badge move
+  // even when they have no socket open on *this* conversation (docs/09 M7
+  // exit criterion). Best-effort: a member whose UserDO call fails doesn't
+  // block message delivery, which already succeeded via `broadcast` above.
+  private async notifyUnread(conversationId: string, senderId: string): Promise<void> {
+    const others = [
+      ...this.ctx.storage.sql.exec<{ user_id: string }>(
+        `SELECT user_id FROM members_cache WHERE status = 'member' AND user_id != ?`,
+        senderId,
+      ),
+    ];
+    await Promise.all(
+      others.map((m) =>
+        userStub(this.env, m.user_id)
+          .bumpUnread(conversationId)
+          .catch((err) => console.error('UserDO.bumpUnread failed', err)),
+      ),
+    );
   }
 
   membershipChanged(members: MemberSnapshot[]): void {

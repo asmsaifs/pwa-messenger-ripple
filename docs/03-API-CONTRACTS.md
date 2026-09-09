@@ -158,10 +158,17 @@ membershipChanged(members: MemberSnapshot[]): Promise<void>
 stats(): Promise<{ count: number; lastSeq: number }>
 
 // UserDO
-notify(payload: UserEvent): Promise<void>
+notify(payload: UserEvent): Promise<void>   // UserEvent excludes `unread` — see bumpUnread/clearUnread
 presence(): Promise<Presence>
 hasLiveSocket(): Promise<boolean>         // decides push vs. no push
 activeCall(): Promise<{ callId: string } | null>
+// `unread`'s count/total are computed by UserDO itself (M7), not passed by the
+// caller — the caller only knows "a message landed" or "the user read up to
+// seq N", never the other conversations' counts needed to total them safely
+// under concurrent bumps from different ConversationDOs.
+bumpUnread(conversationId: string): Promise<void>   // called by ConversationDO.appendMessage for every other member
+clearUnread(conversationId: string): Promise<void>  // called by POST /api/conversations/:id/read
+unreadTotal(): Promise<number>                      // called by GET /api/me
 
 // CallDO
 create(input: { callerId; calleeId; conversationId }): Promise<void>

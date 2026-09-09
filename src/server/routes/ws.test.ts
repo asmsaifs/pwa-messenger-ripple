@@ -165,3 +165,89 @@ describe('ws routes (ConversationDO WS protocol)', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('ws routes (UserDO personal socket, docs/09 M7)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function connectUser(cookie: string): Promise<WebSocket> {
+    const res = await SELF.fetch(`${BASE}/api/ws/user`, {
+      headers: { Cookie: cookie, Upgrade: 'websocket', Origin: ORIGIN },
+    });
+    const ws = res.webSocket;
+    if (!ws) throw new Error(`expected a WebSocket upgrade, got status ${res.status}`);
+    ws.accept();
+    return ws;
+  }
+
+  it('requires auth', async () => {
+    const res = await SELF.fetch(`${BASE}/api/ws/user`, {
+      headers: { Upgrade: 'websocket', Origin: ORIGIN },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('ping/pong round-trips', async () => {
+    const a = await signUpAndVerify('userdo-ping@example.com', 'A');
+    const ws = await connectUser(a);
+    ws.send(JSON.stringify({ t: 'ping' }));
+    const pong = await nextFrame(ws);
+    expect(pong).toEqual({ t: 'pong' });
+    ws.close();
+  });
+
+  it('a new message bumps the recipient\'s unread badge across two open sockets (multi-tab)', async () => {
+    const { conversationId, a, b } = await makeConversation('userdo-unread');
+    const bTab1 = await connectUser(b);
+    const bTab2 = await connectUser(b);
+
+    const meBeforeRes = await SELF.fetch(`${BASE}/api/me`, { headers: { Cookie: b } });
+    const meBefore = await meBeforeRes.json<{ unreadTotal: number }>();
+    expect(meBefore.unreadTotal).toBe(0);
+
+    const sendRes = await post(`/api/conversations/${conversationId}/messages`, a, {
+      clientId: 'userdo-1',
+      kind: 'text',
+      body: 'hi',
+    });
+    expect(sendRes.status).toBe(200);
+
+    const frame1 = await nextFrame(bTab1);
+    const frame2 = await nextFrame(bTab2);
+    expect(frame1).toMatchObject({ t: 'unread', conversationId, count: 1, total: 1 });
+    expect(frame2).toMatchObject({ t: 'unread', conversationId, count: 1, total: 1 });
+
+    // Marking read from one tab clears it for both.
+    await post(`/api/conversations/${conversationId}/read`, b, { seq: 1 });
+    const cleared1 = await nextFrame(bTab1);
+    const cleared2 = await nextFrame(bTab2);
+    expect(cleared1).toEqual({ t: 'unread', conversationId, count: 0, total: 0 });
+    expect(cleared2).toEqual({ t: 'unread', conversationId, count: 0, total: 0 });
+
+    const meAfterRes = await SELF.fetch(`${BASE}/api/me`, { headers: { Cookie: b } });
+    const meAfter = await meAfterRes.json<{ unreadTotal: number }>();
+    expect(meAfter.unreadTotal).toBe(0);
+
+    bTab1.close();
+    bTab2.close();
+  });
+
+  it('accepting a friend request notifies the requester\'s personal socket', async () => {
+    const a = await signUpAndVerify('userdo-fr-a@example.com', 'A');
+    const b = await signUpAndVerify('userdo-fr-b@example.com', 'B');
+    const aSocket = await connectUser(a);
+
+    await post('/api/friends/invite', a, { email: 'userdo-fr-b@example.com' });
+    const aFriends = await SELF.fetch(`${BASE}/api/friends`, { headers: { Cookie: a } });
+    const { outgoing } = await aFriends.json<{ outgoing: { friendshipId: string }[] }>();
+    const friendshipId = outgoing[0]!.friendshipId;
+
+    const acceptRes = await post(`/api/friends/${friendshipId}/accept`, b);
+    const { conversationId } = await acceptRes.json<{ conversationId: string }>();
+
+    const frame = await nextFrame(aSocket);
+    expect(frame).toMatchObject({ t: 'friend_accepted', conversationId });
+    aSocket.close();
+  });
+});

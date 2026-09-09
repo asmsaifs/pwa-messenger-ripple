@@ -38,15 +38,19 @@
   // and other per-user limits.
   // ConversationDO (M6, docs/01 §6) — SQLite messages/receipts/typing, one
   // instance per conversation, addressed the same `idFromName` way.
+  // UserDO (M7, docs/01 §6) — personal event bus/presence/unread, one
+  // instance per user.
   "durable_objects": {
     "bindings": [
       { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
       { "name": "CONVERSATION", "class_name": "ConversationDO" },
+      { "name": "USER", "class_name": "UserDO" },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] },
     { "tag": "v2", "new_sqlite_classes": ["ConversationDO"] },
+    { "tag": "v3", "new_sqlite_classes": ["UserDO"] },
   ],
 
   // Cloudflare Email Sending (M5) — invite emails. No `send_email` binding
