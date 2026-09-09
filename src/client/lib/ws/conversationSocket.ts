@@ -1,5 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { clientFrameSchema, serverFrameSchema, type ClientFrame, type Message, type ServerFrame } from '@shared/messages';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  clientFrameSchema,
+  serverFrameSchema,
+  type ClientFrame,
+  type Message,
+  type ServerFrame,
+} from '@shared/messages';
+import { db, lastSeqMetaKey, type OutboxRow } from '../db';
+import {
+  enqueueOutboxMessage,
+  flushOutbox,
+  listOutbox,
+  markOutboxSent,
+  retryOutboxEntry,
+  subscribeOutbox,
+} from '../outbox';
+
+// Sender id for a locally-composed message that hasn't been confirmed by the
+// server yet (docs/01 §4.1 step 1: "UI renders immediately as ⏳"). Never a
+// real user id, so `own` checks (`senderId !== peer.userId`) always resolve
+// true for it — exactly right, since only your own sends ever sit unconfirmed
+// in the outbox.
+const OUTBOX_SENDER_ID = '__outbox__';
 
 export type ConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 export type PendingStatus = 'pending' | 'sent' | 'error';
@@ -18,10 +40,13 @@ export type TypingState = { userId: string; on: boolean };
 export type ReceiptState = { deliveredSeq: number; readSeq: number };
 
 // Hand-rolled WS client for the ConversationDO protocol (docs/03 §2.1, docs/04
-// §4): reconnect with backoff, `hello`/backfill on (re)connect, and an
-// in-memory `clientId -> status` map for optimistic-send UX. A full Dexie
-// outbox (queued sends surviving a reload) is M8's job — this only covers a
-// single tab's in-flight sends.
+// §4): reconnect with backoff, `hello`/backfill on (re)connect, and a
+// `clientId -> status` map for optimistic-send UX. Sends and the resulting
+// status now round-trip through the Dexie outbox (src/client/lib/outbox.ts,
+// M8) instead of living only in memory — that's what lets a queued send
+// survive a reload, and what the retry UI reads for a failed one. `messages`
+// and `lastSeq` are also mirrored to Dexie (docs/02 §7) so a reopened thread
+// hydrates from cache before the socket finishes connecting.
 export function useConversationSocket(conversationId: string | undefined) {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -29,6 +54,7 @@ export function useConversationSocket(conversationId: string | undefined) {
   const [typing, setTyping] = useState<TypingState | null>(null);
   const [receipts, setReceipts] = useState<Map<string, ReceiptState>>(new Map());
   const [showReconnecting, setShowReconnecting] = useState(false);
+  const [outboxRows, setOutboxRows] = useState<OutboxRow[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const lastSeqRef = useRef(0);
@@ -37,21 +63,38 @@ export function useConversationSocket(conversationId: string | undefined) {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const applyIncomingMessage = useCallback((message: Message) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.clientId === message.clientId)) {
-        return prev.map((m) => (m.clientId === message.clientId ? message : m));
-      }
-      return [...prev, message].sort((a, b) => a.seq - b.seq);
-    });
-    lastSeqRef.current = Math.max(lastSeqRef.current, message.seq);
-    setPending((prev) => {
-      if (!prev.has(message.clientId)) return prev;
-      const next = new Map(prev);
-      next.set(message.clientId, 'sent');
-      return next;
-    });
-  }, []);
+  // Advances the gap-fill cursor and persists it to Dexie so a reload doesn't
+  // force a wider backfill than necessary (docs/02 §7: "`lastSeq` per
+  // conversation drives the gap-fill handshake").
+  const bumpLastSeq = useCallback(
+    (seq: number) => {
+      if (!conversationId || seq <= lastSeqRef.current) return;
+      lastSeqRef.current = seq;
+      void db.meta.put({ key: lastSeqMetaKey(conversationId), value: seq });
+    },
+    [conversationId],
+  );
+
+  const applyIncomingMessage = useCallback(
+    (message: Message) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.clientId === message.clientId)) {
+          return prev.map((m) => (m.clientId === message.clientId ? message : m));
+        }
+        return [...prev, message].sort((a, b) => a.seq - b.seq);
+      });
+      bumpLastSeq(message.seq);
+      setPending((prev) => {
+        if (!prev.has(message.clientId)) return prev;
+        const next = new Map(prev);
+        next.set(message.clientId, 'sent');
+        return next;
+      });
+      if (conversationId) void db.messages.put({ ...message, conversationId });
+      void markOutboxSent(message.clientId);
+    },
+    [bumpLastSeq, conversationId],
+  );
 
   const send = useCallback((frame: ClientFrame) => {
     const ws = wsRef.current;
@@ -75,11 +118,10 @@ export function useConversationSocket(conversationId: string | undefined) {
             for (const m of frame.messages) byClientId.set(m.clientId, m);
             return [...byClientId.values()].sort((a, b) => a.seq - b.seq);
           });
-          if (frame.messages.length > 0) {
-            lastSeqRef.current = Math.max(
-              lastSeqRef.current,
-              ...frame.messages.map((m) => m.seq),
-            );
+          for (const m of frame.messages) {
+            bumpLastSeq(m.seq);
+            if (conversationId) void db.messages.put({ ...m, conversationId });
+            void markOutboxSent(m.clientId);
           }
           return;
         case 'message':
@@ -95,7 +137,10 @@ export function useConversationSocket(conversationId: string | undefined) {
         case 'receipt':
           setReceipts((prev) => {
             const next = new Map(prev);
-            next.set(frame.userId, { deliveredSeq: frame.deliveredSeq, readSeq: frame.readSeq });
+            next.set(frame.userId, {
+              deliveredSeq: frame.deliveredSeq,
+              readSeq: frame.readSeq,
+            });
             return next;
           });
           return;
@@ -105,7 +150,7 @@ export function useConversationSocket(conversationId: string | undefined) {
           return;
       }
     },
-    [applyIncomingMessage, send],
+    [applyIncomingMessage, send, bumpLastSeq, conversationId],
   );
 
   useEffect(() => {
@@ -123,6 +168,10 @@ export function useConversationSocket(conversationId: string | undefined) {
         setShowReconnecting(false);
         setStatus('open');
         pingTimerRef.current = setInterval(() => send({ t: 'ping' }), PING_INTERVAL_MS);
+        // Coming back online is exactly when outbox entries queued while this
+        // socket was down (or before this tab even opened) need retrying —
+        // don't wait for the separate app-level flusher's next tick.
+        void flushOutbox();
       });
 
       ws.addEventListener('message', (event) => {
@@ -134,16 +183,35 @@ export function useConversationSocket(conversationId: string | undefined) {
         if (pingTimerRef.current) clearInterval(pingTimerRef.current);
         if (cancelled) return;
         attemptRef.current += 1;
-        if (attemptRef.current >= RECONNECT_ATTEMPTS_BEFORE_BANNER) setShowReconnecting(true);
+        if (attemptRef.current >= RECONNECT_ATTEMPTS_BEFORE_BANNER)
+          setShowReconnecting(true);
         setStatus('reconnecting');
-        const delay = Math.min(RECONNECT_BASE_MS * 2 ** (attemptRef.current - 1), RECONNECT_MAX_MS);
+        const delay = Math.min(
+          RECONNECT_BASE_MS * 2 ** (attemptRef.current - 1),
+          RECONNECT_MAX_MS,
+        );
         reconnectTimerRef.current = setTimeout(connect, delay);
       });
 
       ws.addEventListener('error', () => ws.close());
     }
 
-    connect();
+    // Hydrate from Dexie before opening the socket: cached messages render
+    // immediately (including fully offline), and `lastSeqRef` must carry the
+    // conversation's own persisted cursor *before* `hello` is sent — a fresh
+    // `0` here would re-backfill everything on every reload instead of just
+    // what's missing (docs/02 §7).
+    void (async () => {
+      const [cached, meta] = await Promise.all([
+        db.messages.where('conversationId').equals(conversationId).sortBy('seq'),
+        db.meta.get(lastSeqMetaKey(conversationId)),
+      ]);
+      if (cancelled) return;
+      if (cached.length > 0) setMessages(cached);
+      lastSeqRef.current = meta?.value ?? 0;
+      connect();
+    })();
+
     return () => {
       cancelled = true;
       if (pingTimerRef.current) clearInterval(pingTimerRef.current);
@@ -160,25 +228,98 @@ export function useConversationSocket(conversationId: string | undefined) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
+  // Composer entry point (docs/01 §4.1): write to the Dexie outbox first —
+  // that's what survives a reload or a fully offline send — then take the
+  // fast path over the live socket if there is one, or fall straight through
+  // to the HTTP-fallback flush if not. Either way the DO's
+  // `UNIQUE(client_id)` makes a duplicate impossible even if both paths race.
   const sendMessage = useCallback(
     (input: { clientId: string; kind: 'text'; body: string }) => {
+      if (!conversationId) return;
       setPending((prev) => new Map(prev).set(input.clientId, 'pending'));
-      send({ t: 'send', ...input });
+      void enqueueOutboxMessage({ ...input, conversationId }).then(() => {
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          send({ t: 'send', ...input });
+        } else {
+          void flushOutbox();
+        }
+      });
     },
-    [send],
+    [conversationId, send],
   );
+
+  const retryMessage = useCallback((clientId: string) => {
+    void retryOutboxEntry(clientId);
+  }, []);
 
   const sendTyping = useCallback((on: boolean) => send({ t: 'typing', on }), [send]);
   const sendRead = useCallback((seq: number) => send({ t: 'read', seq }), [send]);
 
+  // Outbox status (`pending`/`sending` → ⏳, `failed` → retry) is the other
+  // half of the tick shown in ThreadPage — a `sent` row is superseded by the
+  // server echo already merged into `messages` via applyIncomingMessage, so
+  // it's intentionally excluded from both `pending` and `outboxRows` below.
+  useEffect(() => {
+    if (!conversationId) return;
+    let cancelled = false;
+    const refresh = () => {
+      void listOutbox(conversationId).then((rows) => {
+        if (cancelled) return;
+        const unsent = rows.filter((row) => row.status !== 'sent');
+        setOutboxRows(unsent);
+        setPending((prev) => {
+          const next = new Map(prev);
+          for (const row of unsent) {
+            next.set(row.clientId, row.status === 'failed' ? 'error' : 'pending');
+          }
+          return next;
+        });
+      });
+    };
+    refresh();
+    const unsubscribe = subscribeOutbox(refresh);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [conversationId]);
+
+  // What ThreadPage actually renders: confirmed messages plus a synthetic
+  // bubble for every outbox row the server hasn't echoed back yet (docs/01
+  // §4.1 — the composer must render optimistically, not wait for a round
+  // trip that, offline, may not happen for a while). Once a row's `clientId`
+  // shows up in `messages` (the WS echo or a gap-fill backfill), its
+  // synthetic stand-in is dropped in favor of the real one.
+  const messagesWithOutbox = useMemo(() => {
+    const confirmedClientIds = new Set(messages.map((m) => m.clientId));
+    const synthetic: Message[] = outboxRows
+      .filter((row) => !confirmedClientIds.has(row.clientId))
+      .map((row) => ({
+        seq: Number.MAX_SAFE_INTEGER,
+        id: row.clientId,
+        clientId: row.clientId,
+        senderId: OUTBOX_SENDER_ID,
+        kind: row.kind,
+        body: row.body ?? null,
+        attachmentId: row.attachmentId ?? null,
+        callId: null,
+        replyToSeq: row.replyToSeq ?? null,
+        deletedAt: null,
+        createdAt: row.createdAt,
+      }));
+    return [...messages, ...synthetic].sort((a, b) => a.createdAt - b.createdAt);
+  }, [messages, outboxRows]);
+
   return {
     status,
     showReconnecting,
-    messages,
+    messages: messagesWithOutbox,
     pending,
     typing,
     receipts,
     sendMessage,
+    retryMessage,
     sendTyping,
     sendRead,
   };

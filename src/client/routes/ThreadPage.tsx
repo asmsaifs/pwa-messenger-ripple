@@ -19,7 +19,10 @@ function formatDay(ms: number): string {
 }
 
 function formatTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return new Date(ms).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 type Row =
@@ -38,7 +41,8 @@ function buildRows(messages: Message[]): Row[] {
       lastDay = day;
       lastSenderId = null;
     }
-    const grouped = message.senderId === lastSenderId && message.createdAt - lastAt < GROUP_GAP_MS;
+    const grouped =
+      message.senderId === lastSenderId && message.createdAt - lastAt < GROUP_GAP_MS;
     rows.push({ kind: 'message', key: message.clientId, message, grouped });
     lastSenderId = message.senderId;
     lastAt = message.createdAt;
@@ -49,8 +53,18 @@ function buildRows(messages: Message[]): Row[] {
 export function ThreadPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const { data, isPending, isError } = useConversation(conversationId);
-  const { status, showReconnecting, messages, pending, typing, receipts, sendMessage, sendTyping, sendRead } =
-    useConversationSocket(conversationId);
+  const {
+    status,
+    showReconnecting,
+    messages,
+    pending,
+    typing,
+    receipts,
+    sendMessage,
+    retryMessage,
+    sendTyping,
+    sendRead,
+  } = useConversationSocket(conversationId);
   const peerReadSeq = data ? (receipts.get(data.peer.userId)?.readSeq ?? 0) : 0;
   const setReadMarker = useSetReadMarker(conversationId ?? '');
 
@@ -95,11 +109,16 @@ export function ThreadPage() {
           actually being open before driving frames through it. */}
       <span hidden data-testid="ws-status" data-status={status} />
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 px-4">
-        <Link to="/chats" className="text-sm text-slate-500 hover:text-slate-900 lg:hidden">
+        <Link
+          to="/chats"
+          className="text-sm text-slate-500 hover:text-slate-900 lg:hidden"
+        >
           ← Back
         </Link>
         {isPending && <span className="text-sm text-slate-400">Loading…</span>}
-        {isError && <span className="text-sm text-red-600">Couldn't load this conversation.</span>}
+        {isError && (
+          <span className="text-sm text-red-600">Couldn't load this conversation.</span>
+        )}
         {data && (
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">{data.peer.displayName}</div>
@@ -111,7 +130,9 @@ export function ThreadPage() {
       </div>
 
       {showReconnecting && (
-        <div className="bg-amber-50 px-4 py-1 text-center text-xs text-amber-700">Reconnecting…</div>
+        <div className="bg-amber-50 px-4 py-1 text-center text-xs text-amber-700">
+          Reconnecting…
+        </div>
       )}
 
       <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto px-4">
@@ -135,7 +156,13 @@ export function ThreadPage() {
                   key={row.key}
                   ref={virtualizer.measureElement}
                   data-index={item.index}
-                  style={{ position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${item.start}px)` }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    transform: `translateY(${item.start}px)`,
+                  }}
                   className="py-2 text-center text-xs text-slate-400"
                 >
                   {row.label}
@@ -160,8 +187,18 @@ export function ThreadPage() {
                 data-index={item.index}
                 data-testid="message-bubble"
                 data-clientid={message.clientId}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${item.start}px)` }}
-                className={cn('flex py-0.5', own ? 'justify-end' : 'justify-start', row.grouped && 'pt-0')}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  transform: `translateY(${item.start}px)`,
+                }}
+                className={cn(
+                  'flex py-0.5',
+                  own ? 'justify-end' : 'justify-start',
+                  row.grouped && 'pt-0',
+                )}
               >
                 <div
                   className={cn(
@@ -176,13 +213,23 @@ export function ThreadPage() {
                   )}
                   <div
                     className={cn(
-                      'mt-1 text-right text-[10px] opacity-70',
+                      'mt-1 flex items-center justify-end gap-1 text-right text-[10px] opacity-70',
                       own && tick === '✓✓' && 'text-sky-200 opacity-100',
                     )}
                     data-testid="message-tick"
                   >
                     {formatTime(message.createdAt)}
                     {own && ` · ${tick}`}
+                    {own && pendingStatus === 'error' && (
+                      <button
+                        type="button"
+                        onClick={() => retryMessage(message.clientId)}
+                        data-testid="message-retry"
+                        className="ml-1 underline"
+                      >
+                        Retry
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -192,10 +239,20 @@ export function ThreadPage() {
       </div>
 
       <div className="flex items-end gap-2 border-t border-slate-200 p-3">
-        <button type="button" disabled className="text-slate-300" aria-label="Attach file (coming soon)">
+        <button
+          type="button"
+          disabled
+          className="text-slate-300"
+          aria-label="Attach file (coming soon)"
+        >
           ＋
         </button>
-        <button type="button" disabled className="text-slate-300" aria-label="Record voice message (coming soon)">
+        <button
+          type="button"
+          disabled
+          className="text-slate-300"
+          aria-label="Record voice message (coming soon)"
+        >
           🎤
         </button>
         <textarea

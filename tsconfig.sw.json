@@ -23,5 +23,5 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/sw.ts"]
+  "include": ["src/sw.ts", "src/shared/types/background-sync.d.ts"]
 }

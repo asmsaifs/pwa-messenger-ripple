@@ -24,7 +24,7 @@
     "src/server/**/*.ts",
     "src/durable/**/*.ts",
     "src/shared/**/*.ts",
-    "vitest.config.ts",
+    "vitest.worker.config.ts",
     "vitest.setup.ts"
   ]
 }

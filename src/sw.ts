@@ -1,14 +1,20 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { NetworkFirst, CacheFirst, StaleWhileRevalidate, NetworkOnly } from 'workbox-strategies';
+import {
+  NetworkFirst,
+  CacheFirst,
+  StaleWhileRevalidate,
+  NetworkOnly,
+} from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
+import { flushOutbox } from './client/lib/outbox';
 
 declare let self: ServiceWorkerGlobalScope;
 
 // M4 scope (docs/06 §2): precache the app shell + the caching rules below.
-// Push/notificationclick land in M12, Background Sync in M8, badge refresh in M7 —
-// this file grows those handlers when those milestones build the data they need.
+// Push/notificationclick land in M12, badge refresh in M7 — this file grows
+// those handlers when those milestones build the data they need.
 
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
@@ -37,9 +43,7 @@ registerRoute(
   ({ url }) => url.pathname.startsWith('/avatars/'),
   new StaleWhileRevalidate({
     cacheName: 'avatars',
-    plugins: [
-      new ExpirationPlugin({ maxAgeSeconds: 60 * 60 * 24 * 7, maxEntries: 100 }),
-    ],
+    plugins: [new ExpirationPlugin({ maxAgeSeconds: 60 * 60 * 24 * 7, maxEntries: 100 })],
   }),
 );
 
@@ -57,4 +61,14 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+// docs/06 §5: Background Sync tag `outbox-flush` replays the Dexie outbox
+// even when every tab for this origin is closed — the one thing the
+// foreground-only fallback in useOutboxFlusher can't do. Same `flushOutbox`
+// used by the page; it's IndexedDB + fetch, both available in this scope.
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'outbox-flush') {
+    event.waitUntil(flushOutbox());
+  }
 });

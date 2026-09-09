@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { configDefaults } from 'vitest/config';
 import {
   defineWorkersConfig,
   readD1Migrations,
@@ -6,8 +7,9 @@ import {
 
 // Runs the server/DO/policy suites against real Workers runtime bindings
 // (Miniflare) per docs/07 §1 — this is the pool that gives us real D1 now
-// that M1 adds it. Client-side unit tests (src/client/lib) also run here for
-// now; split out a jsdom project if/when component tests (Testing Library) land.
+// that M1 adds it. `src/client/**` is excluded: the Workers runtime has no
+// IndexedDB, so M8's Dexie-backed outbox tests run under vitest.client.config.ts
+// (jsdom + fake-indexeddb) instead — see vitest.workspace.ts.
 //
 // No `@shared` path alias here: `wrangler dev`'s esbuild bundler doesn't read
 // tsconfig paths, so src/server/** and src/durable/** import src/shared/**
@@ -18,6 +20,8 @@ export default defineWorkersConfig(async () => {
 
   return {
     test: {
+      name: 'worker',
+      exclude: [...configDefaults.exclude, 'src/client/**'],
       setupFiles: ['./vitest.setup.ts'],
       poolOptions: {
         workers: {
