@@ -101,4 +101,13 @@ export default tseslint.config(
       globals: { ...globals.node, ...globals.browser },
     },
   },
+
+  // Playwright e2e specs/support (docs/07 §5-6) — Node process, Playwright's
+  // own DOM-shaped fixtures (`page`), not this repo's client/worker globals.
+  {
+    files: ['e2e/**/*.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
 );

@@ -39,7 +39,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8787',
+      // `ws: true` so the dev proxy forwards the ConversationDO WS upgrade
+      // (docs/03 `/api/ws/conversation/:id`, M6) the same way it forwards
+      // every other `/api/*` request — the string shorthand doesn't proxy
+      // upgrades on its own.
+      '/api': { target: 'http://localhost:8787', ws: true },
     },
   },
 });

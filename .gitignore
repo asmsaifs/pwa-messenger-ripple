@@ -9,3 +9,9 @@ worker-configuration.d.ts
 *.tsbuildinfo
 .vscode/*
 !.vscode/extensions.json
+
+# Playwright (docs/07 §5-6)
+.e2e-wrangler.log
+test-results
+playwright-report
+blob-report

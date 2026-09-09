@@ -36,10 +36,18 @@
   // RateLimiterDO (M5, docs/02 §3) — abuse controls (docs/05 §8): invite
   // sends (10/day), invite resends (1/24h), later reused for turn-credential
   // and other per-user limits.
+  // ConversationDO (M6, docs/01 §6) — SQLite messages/receipts/typing, one
+  // instance per conversation, addressed the same `idFromName` way.
   "durable_objects": {
-    "bindings": [{ "name": "RATE_LIMITER", "class_name": "RateLimiterDO" }],
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
+      { "name": "CONVERSATION", "class_name": "ConversationDO" },
+    ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] },
+    { "tag": "v2", "new_sqlite_classes": ["ConversationDO"] },
+  ],
 
   // Cloudflare Email Sending (M5) — invite emails. No `send_email` binding
   // here yet: the pinned wrangler/Miniflare version in this repo (3.114.17)

@@ -17,6 +17,9 @@ export interface Env {
   TURNSTILE_SECRET?: string;
   // RateLimiterDO (M5, docs/02 §3) — abuse controls (docs/05 §8).
   RATE_LIMITER: DurableObjectNamespace<import('../durable/RateLimiterDO').RateLimiterDO>;
+  // ConversationDO (M6, docs/01 §6) — messages/receipts/typing SQLite, one
+  // instance per conversation.
+  CONVERSATION: DurableObjectNamespace<import('../durable/ConversationDO').ConversationDO>;
   // Cloudflare Email Sending (M5) — invite emails. Optional: the `from`
   // domain isn't onboarded in every env (docs/08), so local dev/tests still
   // typecheck and fall back to a log line in src/server/lib/mail.ts.
