@@ -66,6 +66,13 @@ export function NotificationsSection() {
           </Button>
         )}
       </div>
+      {isOn && (
+        <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+          For incoming calls: closing Ripple entirely only gets you a single
+          notification chime. Minimize the window instead of closing it to
+          hear the full ringtone.
+        </p>
+      )}
     </section>
   );
 }
