@@ -106,7 +106,6 @@ self.addEventListener('push', (event: PushEvent) => {
       } catch (err) {
         console.error('[sw] malformed push payload', err);
       }
-      await self.registration.showNotification(title, options);
       // The OS notification sound alone is a single ding, not a ringer — the
       // actual ringtone (src/client/lib/webrtc/ringtone.ts) is WebAudio
       // driven from `callStore`, which only exists inside a page. With no
@@ -117,23 +116,25 @@ self.addEventListener('push', (event: PushEvent) => {
       // loop — no WS frame needed. Skipped when a window is already open;
       // that client already has the WS `incoming_call` frame and is ringing
       // (or about to).
-      if (callUrl) {
-        const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        console.log(
-          '[sw] call push',
-          callUrl,
-          'existing window clients:',
-          clientsList.map((c) => ({ url: c.url, visibilityState: c.visibilityState, focused: c.focused })),
-        );
-        if (clientsList.length === 0) {
-          try {
-            const opened = await self.clients.openWindow(callUrl);
-            console.log('[sw] openWindow result', opened ? opened.url : opened);
-          } catch (err) {
-            console.error('[sw] openWindow threw', err);
-          }
-        }
-      }
+      //
+      // `openWindow()`'s permission to pop a window during a push event is a
+      // short-lived, one-shot grant — awaiting `showNotification()` first
+      // burns through it and `openWindow()` then throws `InvalidAccessError:
+      // Not allowed to open a window` (confirmed via staging SW console).
+      // Racing the two instead of sequencing them keeps `openWindow()` as
+      // close to the start of the event as possible.
+      const openCallWindow = callUrl
+        ? (async (url: string) => {
+            const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+            if (clientsList.length > 0) return;
+            try {
+              await self.clients.openWindow(url);
+            } catch (err) {
+              console.error('[sw] openWindow threw', err);
+            }
+          })(callUrl)
+        : Promise.resolve();
+      await Promise.all([self.registration.showNotification(title, options), openCallWindow]);
     })(),
   );
 });
