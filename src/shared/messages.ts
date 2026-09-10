@@ -3,7 +3,7 @@ import { z } from 'zod';
 // ConversationDO's message shape (docs/02 §2) — rows live in DO SQLite, not
 // D1, so this is the one place both the DO and the client agree on the wire
 // shape (CLAUDE.md rule 5 applies to DO RPC/WS payloads the same as REST).
-export const messageKindSchema = z.enum(['text', 'file', 'image', 'voice']);
+export const messageKindSchema = z.enum(['text', 'file', 'image', 'voice', 'call_event']);
 export type MessageKind = z.infer<typeof messageKindSchema>;
 
 export const messageSchema = z.object({
@@ -89,5 +89,7 @@ export function previewTextFor(kind: MessageKind, body: string | null): string {
       return '📎 Photo';
     case 'voice':
       return '🎤 Voice message';
+    case 'call_event':
+      return body ?? '📞 Call';
   }
 }

@@ -56,4 +56,21 @@ export interface Env {
   // (Cloudflare's `Queue<Body>` generic just types `.send`'s argument) — the
   // consumer validates the real shape with `pushJobSchema` on the way out.
   PUSH_QUEUE: Queue<unknown>;
+  // CallDO (M13, docs/01 §6) — signaling relay + call state machine, one
+  // instance per call.
+  CALL: DurableObjectNamespace<import('../durable/CallDO').CallDO>;
+  // Cloudflare Realtime TURN credential minting (M13, docs/03 §1, docs/05
+  // §6/§10) — `TURN_KEY_ID` identifies the TURN key set, `TURN_API_TOKEN` is
+  // the bearer credential for `POST /v1/turn/keys/:id/credentials/generate`.
+  // Neither reaches client code (CLAUDE.md hard rule 6); rotate quarterly.
+  TURN_KEY_ID: string;
+  TURN_API_TOKEN: string;
+  // Per-user ICE credential cache (docs/02 §6: `ice:{userId}`, TTL
+  // `ttl-300`s) so a page with several call attempts in a session doesn't
+  // re-mint TURN creds on every `GET /api/turn`.
+  ICE_KV: KVNamespace;
+  // Analytics Engine (M13, docs/07 §8) — one `call_metrics` data point per
+  // call end: blobs [end_reason, relayed, region], doubles [setup_ms,
+  // duration_s, avg_rtt_ms, loss_pct], index = hashed user id.
+  ANALYTICS: AnalyticsEngineDataset;
 }

@@ -27,3 +27,11 @@ R2_SECRET_ACCESS_KEY=dev-only-change-me
 # existing subscription (2-key rollover if forced in production).
 VAPID_PUBLIC_KEY=dev-only-run-scripts/generate-vapid-keys.mjs
 VAPID_PRIVATE_KEY=dev-only-run-scripts/generate-vapid-keys.mjs
+
+# M13 — Cloudflare Realtime TURN credential minting (docs/03 §1, docs/05
+# §6/§10). Create a TURN key set in the dashboard (Realtime → TURN) to get a
+# real key id + API token; without a real pair `GET /api/turn` falls back to
+# STUN-only ICE servers locally (see src/server/lib/turn.ts), which is enough
+# for same-network dev but not for a relay-fallback test.
+TURN_KEY_ID=dev-only-change-me
+TURN_API_TOKEN=dev-only-change-me

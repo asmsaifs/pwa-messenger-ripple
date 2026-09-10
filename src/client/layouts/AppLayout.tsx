@@ -1,10 +1,11 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useOutletContext } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { InstallButton } from '../components/InstallButton';
+import { CallMinimizedBar } from '../components/CallMinimizedBar';
 import { useMe } from '../lib/queries/me';
 import { usePushNotificationNav } from '../lib/usePushNotificationNav';
-import { useUserSocket } from '../lib/ws/userSocket';
+import type { RequireAuthContext } from './RequireAuth';
 
 const NAV_LINKS = [
   { to: '/chats', label: 'Chats' },
@@ -17,9 +18,10 @@ const NAV_LINKS = [
 // (ChatShellLayout) — this level only owns the chrome shared by every screen.
 export function AppLayout() {
   const me = useMe();
-  // UserDO's personal socket (docs/09 M7) — mounted once for the whole
-  // authenticated session, not per-thread like useConversationSocket.
-  const { showReconnecting } = useUserSocket(Boolean(me.data));
+  // UserDO's personal socket (docs/09 M7) is mounted one level up, in
+  // RequireAuth, so it stays alive across `/call/:callId` too (docs/01 §6) —
+  // this just reads the reconnecting banner state back out.
+  const { showReconnecting } = useOutletContext<RequireAuthContext>();
   usePushNotificationNav();
   const unreadTotal = me.data?.unreadTotal ?? 0;
 
@@ -61,6 +63,7 @@ export function AppLayout() {
           {me.data && <span className="text-sm text-slate-500">{me.data.profile.displayName}</span>}
         </div>
       </header>
+      <CallMinimizedBar />
       <main className="flex min-h-0 flex-1 flex-col">
         <Outlet />
       </main>

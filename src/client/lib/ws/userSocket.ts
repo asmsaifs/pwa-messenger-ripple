@@ -9,6 +9,7 @@ import type { MeResponse } from '@shared/me';
 import type { ConversationsListResponse } from '@shared/conversations';
 import { meQueryKey } from '../queries/me';
 import { conversationsQueryKey } from '../queries/conversations';
+import { handleCallCancelledFromServer, handleIncomingCall } from '../webrtc/callSession';
 
 export type UserConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -97,8 +98,13 @@ export function useUserSocket(enabled: boolean) {
           case 'conversation_updated':
             void queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
             return;
-          // `incoming_call`/`call_cancelled` are M13's job (no CallDO/call UI
-          // to route them to yet); `presence`/`pong`/`error` need no cache update.
+          case 'incoming_call':
+            handleIncomingCall({ callId: frame.callId, conversationId: frame.conversationId, from: frame.from });
+            return;
+          case 'call_cancelled':
+            handleCallCancelledFromServer(frame.callId);
+            return;
+          // `presence`/`pong`/`error` need no cache update.
           default:
             return;
         }

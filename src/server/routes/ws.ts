@@ -46,3 +46,21 @@ wsRoute.get('/user', async (c) => {
   const stub = c.env.USER.get(c.env.USER.idFromName(actor.userId));
   return stub.fetch(forwarded);
 });
+
+// GET /api/ws/call/:id — the signaling relay socket (docs/01 §4.3, docs/03
+// §2.3). `assertCanActOnCall` re-checks the actor is the caller or callee
+// (never trusted from the URL alone); CallDO itself re-verifies once more on
+// connect against its own persisted state (defense in depth, same pattern as
+// ConversationDO's `isMember`).
+wsRoute.get('/call/:id', async (c) => {
+  const actor = c.get('actor');
+  const id = c.req.param('id');
+  await policy.assertCanActOnCall(c.env, actor, id);
+
+  const forwardedUrl = new URL(c.req.url);
+  forwardedUrl.searchParams.set('actorUserId', actor.userId);
+  const forwarded = new Request(forwardedUrl, c.req.raw);
+
+  const stub = c.env.CALL.get(c.env.CALL.idFromName(id));
+  return stub.fetch(forwarded);
+});

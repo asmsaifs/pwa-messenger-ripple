@@ -36,10 +36,15 @@
   ],
 
   // Better Auth session secondary storage (M3, docs/02 §6).
+  // ICE_KV (M13, docs/02 §6): per-user cached TURN credentials, `ice:{userId}`.
   "kv_namespaces": [
     {
       "binding": "SESSIONS_KV",
       "id": "72298198f66845388ed5f2a3c7fce356",
+    },
+    {
+      "binding": "ICE_KV",
+      "id": "9b6a2f6e4c4a4f6e9b6a2f6e4c4a4f6e",
     },
   ],
 
@@ -50,18 +55,23 @@
   // instance per conversation, addressed the same `idFromName` way.
   // UserDO (M7, docs/01 §6) — personal event bus/presence/unread, one
   // instance per user.
+  // CallDO (M13, docs/01 §6) — signaling relay + call state machine, one
+  // instance per call.
   "durable_objects": {
     "bindings": [
       { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
       { "name": "CONVERSATION", "class_name": "ConversationDO" },
       { "name": "USER", "class_name": "UserDO" },
+      { "name": "CALL", "class_name": "CallDO" },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] },
     { "tag": "v2", "new_sqlite_classes": ["ConversationDO"] },
     { "tag": "v3", "new_sqlite_classes": ["UserDO"] },
+    { "tag": "v4", "new_sqlite_classes": ["CallDO"] },
   ],
+
 
   // Attachment bytes (M9, docs/02 §4). "local" here really is Miniflare's
   // in-memory simulator (docs/08 §1's table), not a real R2 bucket — good
@@ -94,10 +104,12 @@
     ],
   },
 
-  // Orphan sweep (docs/03 §5): delete R2 object + row for attachments stuck
-  // `pending` >24h (abandoned uploads — the client never called `/complete`).
+  // Orphan sweeps (docs/03 §5): `*/10` deletes R2 object + row for
+  // attachments stuck `pending` >24h (abandoned uploads — the client never
+  // called `/complete`). `*/5` (M13) marks `ringing` calls with no live DO
+  // alarm as `missed` (belt-and-braces — see src/server/lib/call-sweep.ts).
   // Other cron jobs in docs/03 §5 belong to later milestones.
-  "triggers": { "crons": ["*/10 * * * *"] },
+  "triggers": { "crons": ["*/10 * * * *", "*/5 * * * *"] },
 
   // Cloudflare Email Sending (M5) — invite emails. No `send_email` binding
   // here yet: the pinned wrangler/Miniflare version in this repo (3.114.17)

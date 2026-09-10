@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, lt, or } from 'drizzle-orm';
 import { getDb } from './db';
 import { calls } from './schema';
 import { uuidv7 } from '../../shared/id';
@@ -22,6 +22,7 @@ export async function createCall(
       createdAt: Date.now(),
     })
     .returning();
+  if (!row) throw new Error('createCall: insert returned no row');
   return row;
 }
 
@@ -94,6 +95,24 @@ export async function getCall(env: Env, actor: Actor, id: string) {
       or(eq(calls.callerId, actor.userId), eq(calls.calleeId, actor.userId)),
     ),
   });
+}
+
+// Belt-and-braces cron sweep (docs/03 §5: "orphan `ringing` calls with no DO
+// alarm; alarms are exact but DO deletion is not guaranteed") — no `Actor`
+// here, this is a scheduled job, not a request.
+export async function listOrphanRingingCalls(env: Env, cutoff: number) {
+  const db = getDb(env);
+  return db.query.calls.findMany({
+    where: and(eq(calls.status, 'ringing'), lt(calls.createdAt, cutoff)),
+  });
+}
+
+export async function markCallMissedDirect(env: Env, callId: string): Promise<void> {
+  const db = getDb(env);
+  await db
+    .update(calls)
+    .set({ status: 'missed', endedAt: Date.now(), endReason: 'orphaned' })
+    .where(and(eq(calls.id, callId), eq(calls.status, 'ringing')));
 }
 
 export async function listCallsForConversation(

@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { CameraCaptureSheet } from '../components/CameraCaptureSheet';
 import { VoiceRecorderSheet } from '../components/VoiceRecorderSheet';
@@ -10,6 +10,9 @@ import { useConversation, useSetReadMarker } from '../lib/queries/conversations'
 import { useConversationSocket } from '../lib/ws/conversationSocket';
 import { ApiError } from '../lib/api';
 import { messageForErrorCode } from '../lib/errors/messages';
+import { startOutgoingCall } from '../lib/webrtc/callSession';
+import { useCallStore } from '../store/callStore';
+import { useOnlineStatus } from '../lib/online-status';
 import { uuidv7 } from '@shared/id';
 import type { Message } from '@shared/messages';
 
@@ -139,6 +142,9 @@ function buildRows(messages: Message[]): Row[] {
 
 export function ThreadPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
+  const navigate = useNavigate();
+  const isOnline = useOnlineStatus();
+  const callStatus = useCallStore((s) => s.status);
   const { data, isPending, isError } = useConversation(conversationId);
   const {
     status,
@@ -187,6 +193,16 @@ export function ThreadPage() {
   }, [rows.length]);
 
   if (!conversationId) return null;
+
+  // docs/04 §2.5: "Call" starts an outgoing call and moves to the full-screen
+  // `/call/:callId` UI once the DO/socket are actually up (docs/01 §4.3) —
+  // navigating before that would land on CallPage's "not available" branch.
+  async function handleStartCall() {
+    if (!data || !conversationId) return;
+    await startOutgoingCall(conversationId, data.peer);
+    const id = useCallStore.getState().callId;
+    if (id) void navigate(`/call/${id}`);
+  }
 
   function handleSend() {
     const body = draft.trim();
@@ -281,12 +297,25 @@ export function ThreadPage() {
           <span className="text-sm text-red-600">Couldn't load this conversation.</span>
         )}
         {data && (
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">{data.peer.displayName}</div>
             <div className="truncate text-xs text-slate-400" data-testid="peer-status">
               {typing?.userId === data.peer.userId ? 'typing…' : 'online'}
             </div>
           </div>
+        )}
+        {data && (
+          <button
+            type="button"
+            data-testid="call-button"
+            onClick={() => void handleStartCall()}
+            disabled={!isOnline || callStatus !== 'idle'}
+            title={!isOnline ? "You're offline" : undefined}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Call"
+          >
+            📞
+          </button>
         )}
       </div>
 
@@ -343,6 +372,26 @@ export function ThreadPage() {
               );
             }
             const message = row.message;
+            if (message.kind === 'call_event') {
+              return (
+                <div
+                  key={row.key}
+                  ref={virtualizer.measureElement}
+                  data-index={item.index}
+                  data-testid="call-event"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    transform: `translateY(${item.start}px)`,
+                  }}
+                  className="py-2 text-center text-xs text-slate-400"
+                >
+                  📞 {message.body}
+                </div>
+              );
+            }
             const own = data ? message.senderId !== data.peer.userId : false;
             const pendingStatus = pending.get(message.clientId);
             const tick =

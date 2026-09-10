@@ -3,8 +3,10 @@ import { ZodError } from 'zod';
 import { AppError, toErrorResponse } from './errors';
 import { createAuth } from './lib/auth';
 import { sweepOrphanAttachments } from './lib/attachment-sweep';
+import { sweepOrphanRingingCalls } from './lib/call-sweep';
 import { csrfProtection } from './middleware/csrf';
 import { attachmentsRoute } from './routes/attachments';
+import { callsRoute, turnRoute } from './routes/calls';
 import { conversationsRoute } from './routes/conversations';
 import { friendsRoute } from './routes/friends';
 import { healthRoute } from './routes/health';
@@ -21,6 +23,7 @@ import type { Env } from './env';
 export { RateLimiterDO } from '../durable/RateLimiterDO';
 export { ConversationDO } from '../durable/ConversationDO';
 export { UserDO } from '../durable/UserDO';
+export { CallDO } from '../durable/CallDO';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -58,6 +61,8 @@ app.route('/api/conversations', conversationsRoute);
 app.route('/api/messages', messagesRoute);
 app.route('/api/attachments', attachmentsRoute);
 app.route('/api/push', pushRoute);
+app.route('/api/calls', callsRoute);
+app.route('/api/turn', turnRoute);
 app.route('/api/ws', wsRoute);
 
 // Fallback for anything not handled above: hand off to Workers Static Assets,
@@ -67,10 +72,14 @@ app.get('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default {
   fetch: app.fetch,
-  // wrangler.jsonc's `triggers.crons` (M9: orphan attachment sweep). Other
-  // cron jobs in docs/03 §5 are added by the milestones that need them —
-  // this dispatches on schedule since there's only the one so far.
-  scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+  // wrangler.jsonc's `triggers.crons` (M9: orphan attachment sweep; M13:
+  // orphan ringing-call sweep). Dispatches on `event.cron` since there's now
+  // more than one schedule sharing this one export.
+  scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    if (event.cron === '*/5 * * * *') {
+      ctx.waitUntil(sweepOrphanRingingCalls(env));
+      return;
+    }
     ctx.waitUntil(sweepOrphanAttachments(env));
   },
   // `push-queue` consumer (docs/03 §4, docs/09 M12) — wrangler.jsonc's
