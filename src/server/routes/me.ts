@@ -90,7 +90,10 @@ meRoute.get('/sessions', async (c) => {
       id: s.id,
       userAgent: s.userAgent ?? null,
       ipAddress: s.ipAddress ?? null,
-      createdAt: s.createdAt.getTime(),
+      // Better Auth types `createdAt` as `Date`, but sessions round-trip
+      // through the KV secondary storage as JSON, so at runtime it's really
+      // a string — `new Date(...)` accepts a Date, string, or number alike.
+      createdAt: new Date(s.createdAt).getTime(),
       current: s.id === actor.sessionId,
     })),
   });

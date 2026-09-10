@@ -104,10 +104,12 @@ pnpm dev            # vite (5173) + wrangler dev (8787) concurrently, Vite proxi
 ## 5. Deploy
 ```bash
 wrangler d1 migrations apply ripple-prod --remote     # always before the code deploy
-pnpm build                                            # vite build → dist/client
+VITE_VAPID_PUBLIC_KEY=<same value as the VAPID_PUBLIC_KEY secret> pnpm build   # vite build → dist/client
 wrangler deploy --env production
 ```
 CI does this on `main`. **Migration ordering rule:** schema changes must be backward-compatible with the currently deployed Worker (expand → deploy → contract in a later release), because migrations and code do not deploy atomically.
+
+`VITE_VAPID_PUBLIC_KEY` is baked into the client bundle at **build time** by Vite — unlike `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`, which are `wrangler secret put` values the Worker reads at runtime, this one has no effect unless it's set in the shell that runs `pnpm build`. It's the public half of the same keypair, safe client-side. Locally `pnpm dev` picks it up from `.env.local`; a build run without it silently ships working code with push notifications reporting "Not supported in this browser" in every browser (`pushSupported()` in `src/client/lib/push.ts` checks for it).
 
 Gradual rollout for risky releases:
 ```bash
