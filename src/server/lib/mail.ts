@@ -1,82 +1,84 @@
 import type { Env } from '../env';
 
-// verify/reset links are logged so local dev and manual verification can
-// follow them — the "local mail catcher" docs/07 §5 (E2E #1) describes.
-export function logAuthEmail(kind: 'verify-email' | 'reset-password', to: string, url: string) {
+// Local-only fallback: logs the link so local dev and manual verification can
+// follow it — the "local mail catcher" docs/07 §5 (E2E #1) describes. Never
+// used once `BREVO_API_KEY` is set (docs/02 §1: verify/reset/invite tokens
+// must "never [be] stored or logged" once real sending is live).
+function logAuthEmail(kind: 'verify-email' | 'reset-password', to: string, url: string) {
   console.log(`[auth email] ${kind} -> ${to}: ${url}`);
 }
 
-const FROM_ADDRESS = 'invites@ripple.app';
+const FROM_ADDRESS = 'invites@fiqraat.com';
 const FROM_NAME = 'Ripple';
 
-// Cloudflare Email Sending (M5, `send_email` binding in wrangler.jsonc —
-// domain must be onboarded, docs/08 §deploy). The invite URL carries the raw
-// token, which docs/02 §1 says must "never [be] stored or logged" — unlike
-// `logAuthEmail` above, this never falls back to printing the URL. If the
-// send fails (binding missing locally, domain not yet onboarded, etc.) we log
-// only that fact, not the link, and let the caller's response still succeed —
-// the invitation row exists either way and can be resent once sending works.
+// Brevo transactional email API (docs/08 §6). Shared by invite/verify/reset
+// sends below. Errors are swallowed after logging — the caller's response
+// still succeeds (the underlying row/token exists either way and the action
+// can be retried once sending works), and the failure log never includes the
+// URL, only the recipient.
+async function sendBrevoEmail(
+  env: Env,
+  input: { to: string; subject: string; text: string; html: string },
+  logLabel: string,
+): Promise<void> {
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': env.BREVO_API_KEY!,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { email: FROM_ADDRESS, name: FROM_NAME },
+        to: [{ email: input.to }],
+        subject: input.subject,
+        htmlContent: input.html,
+        textContent: input.text,
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[${logLabel}] Brevo send failed for ${input.to}: ${res.status} ${await res.text()}`);
+    }
+  } catch (err) {
+    console.error(`[${logLabel}] send failed for ${input.to}:`, err);
+  }
+}
+
 export async function sendInviteEmail(
   env: Env,
   input: { to: string; inviterName: string; url: string },
 ): Promise<void> {
-  if (!env.EMAIL) {
-    console.log(`[invite email] EMAIL binding not configured — invite to ${input.to} not sent`);
+  if (!env.BREVO_API_KEY) {
+    console.log(`[invite email] BREVO_API_KEY not configured — invite to ${input.to} not sent`);
     return;
   }
   const subject = `${input.inviterName} invited you to Ripple`;
   const text = `${input.inviterName} invited you to chat on Ripple.\n\nJoin: ${input.url}\n\nThis link expires in 7 days.`;
   const html = `<p>${escapeHtml(input.inviterName)} invited you to chat on Ripple.</p><p><a href="${escapeHtml(input.url)}">Accept the invite</a></p><p>This link expires in 7 days.</p>`;
-  const raw = buildRawMimeEmail({
-    from: { address: FROM_ADDRESS, name: FROM_NAME },
-    to: input.to,
-    subject,
-    text,
-    html,
-  });
-
-  try {
-    // Dynamic import, not a static one: `cloudflare:email` isn't resolvable
-    // by every runtime this Worker script loads under (e.g. the pinned local
-    // vitest-pool-workers/Miniflare version predates it) — deferring the
-    // import until a send is actually attempted (i.e. `env.EMAIL` exists)
-    // keeps every other route/test loadable regardless.
-    const { EmailMessage } = await import('cloudflare:email');
-    const message = new EmailMessage(FROM_ADDRESS, input.to, raw);
-    await env.EMAIL.send(message);
-  } catch (err) {
-    console.error(`[invite email] send failed for ${input.to}:`, err);
-  }
+  await sendBrevoEmail(env, { to: input.to, subject, text, html }, 'invite email');
 }
 
-function buildRawMimeEmail(input: {
-  from: { address: string; name: string };
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-}): string {
-  const boundary = `----ripple-${crypto.randomUUID()}`;
-  return [
-    `From: ${input.from.name} <${input.from.address}>`,
-    `To: ${input.to}`,
-    `Subject: ${input.subject}`,
-    'MIME-Version: 1.0',
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    'Content-Type: text/plain; charset="utf-8"',
-    '',
-    input.text,
-    '',
-    `--${boundary}`,
-    'Content-Type: text/html; charset="utf-8"',
-    '',
-    input.html,
-    '',
-    `--${boundary}--`,
-    '',
-  ].join('\r\n');
+export async function sendVerificationEmail(env: Env, input: { to: string; url: string }): Promise<void> {
+  if (!env.BREVO_API_KEY) {
+    logAuthEmail('verify-email', input.to, input.url);
+    return;
+  }
+  const subject = 'Verify your Ripple email';
+  const text = `Verify your email to finish setting up Ripple.\n\nVerify: ${input.url}`;
+  const html = `<p>Verify your email to finish setting up Ripple.</p><p><a href="${escapeHtml(input.url)}">Verify email</a></p>`;
+  await sendBrevoEmail(env, { to: input.to, subject, text, html }, 'verify email');
+}
+
+export async function sendResetPasswordEmail(env: Env, input: { to: string; url: string }): Promise<void> {
+  if (!env.BREVO_API_KEY) {
+    logAuthEmail('reset-password', input.to, input.url);
+    return;
+  }
+  const subject = 'Reset your Ripple password';
+  const text = `Reset your Ripple password.\n\nReset: ${input.url}\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.`;
+  const html = `<p>Reset your Ripple password.</p><p><a href="${escapeHtml(input.url)}">Reset password</a></p><p>This link expires in 1 hour. If you didn't request this, you can ignore this email.</p>`;
+  await sendBrevoEmail(env, { to: input.to, subject, text, html }, 'reset password email');
 }
 
 const HTML_ESCAPES: Record<string, string> = {

@@ -7,7 +7,7 @@ import { getDb } from '../repos/db';
 import { getPendingDeletion } from '../repos/account';
 import { createProfile } from '../repos/profiles';
 import { findUserByEmail } from '../repos/users';
-import { logAuthEmail } from './mail';
+import { sendResetPasswordEmail, sendVerificationEmail } from './mail';
 import * as schema from '../repos/schema';
 import type { Env } from '../env';
 
@@ -87,10 +87,7 @@ export function createAuth(env: Env) {
       requireEmailVerification: true,
       resetPasswordTokenExpiresIn: 60 * 60, // 1h (docs/05 §2)
       revokeSessionsOnPasswordReset: true, // docs/05 §2: reset revokes every session
-      sendResetPassword: ({ user, url }) => {
-        logAuthEmail('reset-password', user.email, url);
-        return Promise.resolve();
-      },
+      sendResetPassword: ({ user, url }) => sendResetPasswordEmail(env, { to: user.email, url }),
       // Resetting a password revokes every other session (docs/05 §2);
       // better-auth's `/reset-password` does this itself before this hook
       // fires, so there's nothing left to do here beyond the audit log.
@@ -103,10 +100,7 @@ export function createAuth(env: Env) {
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      sendVerificationEmail: ({ user, url }) => {
-        logAuthEmail('verify-email', user.email, url);
-        return Promise.resolve();
-      },
+      sendVerificationEmail: ({ user, url }) => sendVerificationEmail(env, { to: user.email, url }),
     },
 
     // Keeps verification/reset tokens in D1 (matching docs/02 §1's hand-defined

@@ -135,13 +135,75 @@
   // whose 30-day grace period has passed.
   "triggers": { "crons": ["*/10 * * * *", "*/5 * * * *", "0 4 * * *"] },
 
-  // Cloudflare Email Sending (M5) — invite emails. No `send_email` binding
-  // here yet: the pinned wrangler/Miniflare version in this repo (3.114.17)
-  // doesn't support it (adding it made every local worker fail to boot with
-  // "internal error" — reproduced, not assumed). src/server/lib/mail.ts's
-  // `sendInviteEmail` already checks for `env.EMAIL` and falls back to a
-  // console-log "local mail catcher" when it's absent, so invites still work
-  // end-to-end locally. Add `"send_email": [{ "name": "EMAIL" }]` here once
-  // wrangler is upgraded (`npm install --save-dev wrangler@4`) and the domain
-  // is onboarded via `wrangler email sending enable <domain>` (docs/08).
+  // Invite emails go through Brevo's transactional API (docs/08 §6), not
+  // Cloudflare Email Sending — no wrangler binding needed, just the
+  // `BREVO_API_KEY` secret per env (`wrangler secret put BREVO_API_KEY
+  // --env <env>`). Absent locally, `sendInviteEmail` falls back to a
+  // console-log "local mail catcher".
+
+  // Staging (docs/08 §1, §5): no custom domain yet, so it serves off the
+  // account's workers.dev subdomain instead of `staging.ripple.app`.
+  // Distinct D1/R2/KV/queues from local and prod so no environment can read
+  // or write another's data.
+  "env": {
+    "staging": {
+      "durable_objects": {
+        "bindings": [
+          { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
+          { "name": "CONVERSATION", "class_name": "ConversationDO" },
+          { "name": "USER", "class_name": "UserDO" },
+          { "name": "CALL", "class_name": "CallDO" },
+        ],
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] },
+        { "tag": "v2", "new_sqlite_classes": ["ConversationDO"] },
+        { "tag": "v3", "new_sqlite_classes": ["UserDO"] },
+        { "tag": "v4", "new_sqlite_classes": ["CallDO"] },
+      ],
+      "triggers": { "crons": ["*/10 * * * *", "*/5 * * * *", "0 4 * * *"] },
+      "vars": {
+        "APP_ENV": "staging",
+        "APP_BASE_URL": "https://ripple-staging.asmsaifs.workers.dev",
+        "R2_ACCOUNT_ID": "21408569f7e7d8f7c81231eb197fae15",
+        "MEDIA_BUCKET_NAME": "ripple-media-staging",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ripple-staging",
+          "database_id": "d080c55a-126f-4e18-859d-5c4e591c8adf",
+          "migrations_dir": "./migrations",
+        },
+      ],
+      "kv_namespaces": [
+        { "binding": "SESSIONS_KV", "id": "a222903bd3d9492aaaf223d9328d3db6" },
+        { "binding": "ICE_KV", "id": "c8754a24e2cf4189a1376f3ac288edb3" },
+      ],
+      "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "ripple-media-staging" }],
+      "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "call_metrics_staging" }],
+      "queues": {
+        "producers": [
+          { "binding": "PUSH_QUEUE", "queue": "ripple-staging-push-queue" },
+          { "binding": "EXPORT_QUEUE", "queue": "ripple-staging-export-queue" },
+        ],
+        "consumers": [
+          {
+            "queue": "ripple-staging-push-queue",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "ripple-staging-push-dlq",
+          },
+          {
+            "queue": "ripple-staging-export-queue",
+            "max_batch_size": 1,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "ripple-staging-export-dlq",
+          },
+        ],
+      },
+    },
+  },
 }

@@ -43,7 +43,6 @@ Preview must never bind prod D1/R2. Enforced by using `[env.staging]` / `[env.pr
                     "max_retries": 3, "dead_letter_queue": "push-dlq" }]
   },
   "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "ripple_call_metrics" }],
-  "send_email": [{ "name": "EMAIL", "destination_address": null }],
   "triggers": { "crons": ["*/10 * * * *", "0 * * * *", "0 3 * * *", "0 4 * * *", "*/5 * * * *"] },
 
   "vars": { "APP_ENV": "local", "APP_BASE_URL": "http://localhost:8787" },
@@ -73,6 +72,7 @@ wrangler secret put R2_ACCESS_KEY_ID
 wrangler secret put R2_SECRET_ACCESS_KEY
 wrangler secret put TURNSTILE_SECRET
 wrangler secret put SENTRY_DSN
+wrangler secret put BREVO_API_KEY
 ```
 Repeat with `--env staging` / `--env production`. Locally these go in `.dev.vars` (gitignored).
 
@@ -97,7 +97,7 @@ wrangler d1 migrations apply ripple-local --local
 # TURN: dash → Realtime → TURN → create key → TURN_KEY_ID / TURN_API_TOKEN
 npx web-push generate-vapid-keys
 
-# email: verify the sending domain in dash → Email → Email Sending; add SPF/DKIM/DMARC records
+# email: verify the sending domain in Brevo (Senders & IP → Domains); add the SPF/DKIM/DMARC records it gives you
 pnpm dev            # vite (5173) + wrangler dev (8787) concurrently, Vite proxies /api → 8787
 ```
 
@@ -116,10 +116,11 @@ wrangler versions deploy <new>@10% <old>@90% --env production
 ```
 DO caveat: a gradual rollout runs two code versions against the same Durable Objects. Keep DO RPC and WS protocol changes additive, and version the WS protocol (`{v:1}` in `hello`) so an old client never trips over a new frame type.
 
-## 6. Email (Cloudflare Email Sending)
-- Verify the sending domain in the dashboard; add the SPF, DKIM, and DMARC (`p=quarantine; rua=…`) records it gives you.
+## 6. Email (Brevo transactional API)
+- Verify the sending domain in Brevo (Senders & IP → Domains); add the SPF, DKIM, and DMARC (`p=quarantine; rua=…`) records it gives you.
+- Sender: `invites@fiqraat.com`. `BREVO_API_KEY` is the only secret needed — no wrangler binding, `sendInviteEmail` (`src/server/lib/mail.ts`) calls Brevo's `POST /v3/smtp/email` directly via `fetch`.
 - Templates: `verify-email`, `reset-password`, `invite`, `friend-request-digest` — plain-text alternative for every one (invites land in spam without it).
-- Better Auth's `sendVerificationEmail` / `sendResetPassword` hooks call the `EMAIL` binding directly; no third-party key.
+- Better Auth's `sendVerificationEmail` / `sendResetPassword` hooks (`src/server/lib/auth.ts`) currently only call `logAuthEmail`, which logs the link and never sends — verification/reset mail does not go out in any environment yet. Wiring those two through Brevo the same way `sendInviteEmail` does is open work, not yet scheduled on docs/09.
 
 ## 7. Release process
 1. Squash-merge to `main` → CI deploys staging.

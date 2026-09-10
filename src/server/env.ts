@@ -23,10 +23,10 @@ export interface Env {
   // UserDO (M7, docs/01 §6, docs/02 §3) — personal event bus, presence,
   // unread counts; one instance per user.
   USER: DurableObjectNamespace<import('../durable/UserDO').UserDO>;
-  // Cloudflare Email Sending (M5) — invite emails. Optional: the `from`
-  // domain isn't onboarded in every env (docs/08), so local dev/tests still
-  // typecheck and fall back to a log line in src/server/lib/mail.ts.
-  EMAIL?: SendEmail;
+  // Brevo transactional email API (M5, docs/08 §6) — invite emails. Optional:
+  // absent in local dev/tests, where src/server/lib/mail.ts falls back to a
+  // log line instead of calling out to Brevo.
+  BREVO_API_KEY?: string;
   // R2 (M9, docs/02 §4) — attachment bytes. Binding for server-side HEAD/GET/
   // delete (never a public URL, docs/05 §7); the S3-compatible credentials
   // below are for presigning PUT/GET only (aws4fetch, src/server/lib/r2-presign.ts) —
