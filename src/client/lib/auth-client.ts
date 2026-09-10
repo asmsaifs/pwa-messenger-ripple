@@ -57,3 +57,25 @@ export function forgetPassword(input: { email: string }): Promise<void> {
 export function resetPassword(input: { newPassword: string; token: string }): Promise<void> {
   return authFetch('/reset-password', input);
 }
+
+export function sendVerificationEmail(input: { email: string; callbackURL?: string }): Promise<void> {
+  return authFetch('/send-verification-email', input);
+}
+
+// Codes better-auth's GET /verify-email appends to its `?error=` redirect
+// (src/server/routes: the `/api/auth/*` catch-all just proxies its handler).
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  TOKEN_EXPIRED: 'That verification link expired. Enter your email below to get a new one.',
+  INVALID_TOKEN: 'That verification link is invalid. Enter your email below to get a new one.',
+  USER_NOT_FOUND: "That verification link doesn't match an account.",
+  INVALID_USER: 'That verification link belongs to a different account.',
+};
+
+export function authErrorMessage(code: string | null): string | null {
+  if (!code) return null;
+  return AUTH_ERROR_MESSAGES[code] ?? 'That link is no longer valid.';
+}
+
+export function isResendableAuthError(code: string | null): boolean {
+  return code === 'TOKEN_EXPIRED' || code === 'INVALID_TOKEN';
+}

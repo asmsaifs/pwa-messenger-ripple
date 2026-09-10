@@ -100,6 +100,11 @@ export function createAuth(env: Env) {
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
+      // docs/05 §2 only mandates a 1h TTL for password-reset tokens; unlike a
+      // reset (attacker-triggerable, wants a tight window), a verify link
+      // just needs to outlive normal email latency + a distracted user, so
+      // it gets a longer one.
+      expiresIn: 60 * 60 * 24, // 24h
       sendVerificationEmail: ({ user, url }) => sendVerificationEmail(env, { to: user.email, url }),
     },
 

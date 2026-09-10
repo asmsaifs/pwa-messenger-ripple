@@ -1,9 +1,15 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { AuthClientError, signInEmail } from '../lib/auth-client';
+import {
+  AuthClientError,
+  authErrorMessage,
+  isResendableAuthError,
+  sendVerificationEmail,
+  signInEmail,
+} from '../lib/auth-client';
 import { useInvalidateMe } from '../lib/queries/me';
 
 export function LoginPage() {
@@ -15,6 +21,19 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+
+  const [searchParams] = useSearchParams();
+  const linkErrorCode = searchParams.get('error');
+  const linkErrorMessage = authErrorMessage(linkErrorCode);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const handleResend = () => {
+    if (!email) return;
+    setResendStatus('sending');
+    void sendVerificationEmail({ email })
+      .then(() => setResendStatus('sent'))
+      .catch(() => setResendStatus('error'));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +56,12 @@ export function LoginPage() {
         <CardTitle className="text-xl">Log in</CardTitle>
       </CardHeader>
       <CardContent>
+        {linkErrorMessage && (
+          <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+            {linkErrorMessage}
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
             Email
@@ -61,6 +86,27 @@ export function LoginPage() {
           </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
+
+          {isResendableAuthError(linkErrorCode) && (
+            <div className="flex flex-col gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!email || resendStatus === 'sending'}
+                onClick={handleResend}
+              >
+                {resendStatus === 'sending' ? 'Sending…' : 'Resend verification email'}
+              </Button>
+              {resendStatus === 'sent' && (
+                <p className="text-sm text-ink-muted">
+                  If that email has an account, a new link is on its way.
+                </p>
+              )}
+              {resendStatus === 'error' && (
+                <p className="text-sm text-red-600">Couldn't resend — try again.</p>
+              )}
+            </div>
+          )}
 
           <Button type="submit" disabled={submitting} className="mt-1">
             {submitting ? 'Logging in…' : 'Log in'}
