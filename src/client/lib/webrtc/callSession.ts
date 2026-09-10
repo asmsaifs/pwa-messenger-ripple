@@ -1,6 +1,6 @@
 import type { PublicProfile } from '@shared/user-events';
 import type { CallServerFrame, CallSignalFrame } from '@shared/calls';
-import { declineCall, fetchTurnCredentials, startCall } from '../calls';
+import { declineCall, fetchCallDetail, fetchTurnCredentials, startCall } from '../calls';
 import { connectCallSocket, type CallSocketHandle } from '../ws/callSocket';
 import { getCallAudioConstraints, applyAudioEncoderPrefs, CallPeerConnection } from './peerConnection';
 import { useCallStore, resetCallStore } from '../../store/callStore';
@@ -311,6 +311,55 @@ export function handleIncomingCall(input: { callId: string; conversationId: stri
     conversationId: input.conversationId,
     peer: input.from,
   });
+}
+
+// docs/03 §2.3 cold-start gap: `handleIncomingCall` only ever runs off the
+// `incoming_call` UserDO frame, sent once, at ring time, only if the
+// callee's socket was already live (`CallDO.create`'s `hasLiveSocket`
+// branch). A PWA launched fresh from a push notification's Accept action
+// misses that frame entirely — its `callStore` is still `idle` when
+// `CallPage` mounts, which otherwise renders "isn't available anymore" even
+// though the call is still ringing. Called from `CallPage` on mount
+// whenever the route names a call the store doesn't know about yet.
+export async function hydrateCallFromRoute(callId: string): Promise<void> {
+  if (useCallStore.getState().callId) return; // already populated (WS frame won the race) — don't clobber it
+  try {
+    const { call, peer, direction } = await fetchCallDetail(callId);
+    if (call.status === 'ringing' && direction === 'callee') {
+      resetCallStore();
+      useCallStore.setState({
+        status: 'incoming-ringing',
+        direction: 'incoming',
+        callId: call.id,
+        conversationId: call.conversationId,
+        peer,
+      });
+      return;
+    }
+    if (call.status === 'ended' || call.status === 'missed' || call.status === 'declined' || call.status === 'failed') {
+      resetCallStore();
+      useCallStore.setState({
+        status: 'ended',
+        callId: call.id,
+        conversationId: call.conversationId,
+        peer,
+        endedLabel:
+          call.status === 'missed'
+            ? 'No answer'
+            : call.status === 'declined'
+              ? 'Declined'
+              : call.status === 'failed'
+                ? 'Connection failed'
+                : 'Call ended',
+      });
+    }
+    // A ringing call as the *caller*, or one already `active`/`connecting`,
+    // has no local `RTCPeerConnection`/socket to rejoin on a cold reload —
+    // left as `idle` so `CallPage`'s existing fallback screen covers it.
+  } catch {
+    // Best-effort: a failed/unauthorized lookup just leaves the store
+    // `idle`, which `CallPage` already renders as "isn't available anymore".
+  }
 }
 
 export function handleCallCancelledFromServer(callId: string, reason?: string): void {

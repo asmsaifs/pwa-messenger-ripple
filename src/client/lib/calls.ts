@@ -1,6 +1,8 @@
 import {
+  callDetailResponseSchema,
   createCallResponseSchema,
   turnResponseSchema,
+  type CallDetailResponse,
   type CreateCallResponse,
   type TurnResponse,
 } from '@shared/calls';
@@ -22,4 +24,8 @@ export async function declineCall(callId: string): Promise<void> {
 
 export async function fetchTurnCredentials(): Promise<TurnResponse> {
   return apiFetch('/api/turn', turnResponseSchema);
+}
+
+export async function fetchCallDetail(callId: string): Promise<CallDetailResponse> {
+  return apiFetch(`/api/calls/${callId}`, callDetailResponseSchema);
 }

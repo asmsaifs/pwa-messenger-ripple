@@ -3,11 +3,13 @@ import { requireAuth } from '../middleware/actor';
 import * as policy from '../policy';
 import * as callsRepo from '../repos/calls';
 import * as conversationsRepo from '../repos/conversations';
+import * as profilesRepo from '../repos/profiles';
 import { callStub } from '../lib/call-do';
 import { takeRateLimit } from '../lib/rate-limit';
 import { getIceServersForUser } from '../lib/turn';
 import { userStub } from '../lib/user-do';
 import {
+  callDetailResponseSchema,
   createCallResponseSchema,
   createCallSchema,
   listCallsResponseSchema,
@@ -112,6 +114,35 @@ callsRoute.post('/:id/decline', async (c) => {
   if (actor.userId !== call.calleeId) return c.body(null, 204); // only the callee can decline; a no-op for the caller keeps this endpoint enumeration-safe
   await callStub(c.env, id).decline(actor.userId, 'user');
   return c.body(null, 204);
+});
+
+// `GET /api/calls/:id → { call, peer, direction }` — cold-start hydration
+// for a client with no WS-populated call store yet (docs/03 §2.3 addendum):
+// a PWA launched fresh from a push notification's Accept action never saw
+// the `incoming_call` UserDO frame the ringing screen normally comes from,
+// so `CallPage` has to be able to ask "what's the state of this call?"
+// directly instead of only ever being told. D1's `calls` row (not CallDO) is
+// the source here — the same shape callSweep./history already read, so a
+// terminal state written by an alarm or the sweep shows up here too.
+callsRoute.get('/:id', async (c) => {
+  const actor = c.get('actor');
+  const id = c.req.param('id');
+  const call = await policy.assertCanActOnCall(c.env, actor, id);
+  const direction = actor.userId === call.callerId ? 'caller' : 'callee';
+  const peerId = direction === 'caller' ? call.calleeId : call.callerId;
+  const peerProfile = await profilesRepo.getProfile(c.env, actor, peerId);
+  return c.json(
+    callDetailResponseSchema.parse({
+      call: toCallDto(call),
+      peer: {
+        userId: peerId,
+        displayName: peerProfile?.displayName ?? 'Someone',
+        avatarKey: peerProfile?.avatarKey ?? null,
+        statusText: peerProfile?.statusText ?? null,
+      },
+      direction,
+    }),
+  );
 });
 
 // `GET /api/calls?conversationId= → history page` (docs/03 §1).

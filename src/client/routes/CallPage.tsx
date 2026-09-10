@@ -5,6 +5,7 @@ import {
   acceptIncomingCall,
   declineIncomingCall,
   hangUp,
+  hydrateCallFromRoute,
   resetIdleCallState,
   setOutputDevice,
   subscribeRemoteStream,
@@ -40,6 +41,28 @@ export function CallPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [now, setNow] = useState(() => Date.now());
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [hydrating, setHydrating] = useState(() => !!routeCallId && !callId && status === 'idle');
+
+  // Cold-start recovery (docs/03 §2.3): a PWA launched fresh from a push
+  // notification's Accept action never received the `incoming_call` WS
+  // frame `callStore` normally comes from, so the route names a call the
+  // store doesn't know about yet. Ask the server directly rather than
+  // falling through to the "isn't available anymore" screen below.
+  useEffect(() => {
+    if (!routeCallId || callId || status !== 'idle') {
+      setHydrating(false);
+      return;
+    }
+    let cancelled = false;
+    setHydrating(true);
+    void hydrateCallFromRoute(routeCallId).finally(() => {
+      if (!cancelled) setHydrating(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeCallId]);
 
   // Attach the remote stream as it arrives/changes (docs/06 §"Audio focus":
   // `<audio autoplay playsinline>`).
@@ -98,6 +121,14 @@ export function CallPage() {
   const inputDevices = devices.filter((d) => d.kind === 'audioinput');
   const outputDevices = devices.filter((d) => d.kind === 'audiooutput');
   const supportsSinkId = typeof (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId === 'function';
+
+  if (hydrating) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-900 text-sm text-slate-300">
+        <p>Loading call…</p>
+      </div>
+    );
+  }
 
   if (!routeCallId || (callId && callId !== routeCallId) || (!callId && status === 'idle')) {
     return (

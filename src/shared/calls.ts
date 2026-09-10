@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { publicProfileSchema } from './user-events';
 
 // Voice calls (docs/01 §4.3, docs/03 §1/§2.3/§3, docs/09 M13) — REST +
 // `CallDO` WS protocol, shared by the route/DO (validation) and the client
@@ -62,6 +63,19 @@ export type Call = z.infer<typeof callSchema>;
 
 export const listCallsResponseSchema = z.object({ calls: z.array(callSchema) });
 export type ListCallsResponse = z.infer<typeof listCallsResponseSchema>;
+
+// `GET /api/calls/:id → { call, peer, direction }` (docs/03 §1 addendum) —
+// cold-start hydration for a client that has no WS-populated `callStore` yet
+// (e.g. a PWA launched fresh from a push notification's Accept action, which
+// never received the `incoming_call` UserDO frame the ringing screen
+// normally comes from). `direction` is resolved server-side from the
+// session actor, never trusted from the client.
+export const callDetailResponseSchema = z.object({
+  call: callSchema,
+  peer: publicProfileSchema,
+  direction: z.enum(['caller', 'callee']),
+});
+export type CallDetailResponse = z.infer<typeof callDetailResponseSchema>;
 
 // `GET /api/turn → { iceServers, ttlSeconds }` (docs/03 §1) — Cloudflare
 // Realtime TURN credentials minted server-side, 1h TTL, cached client-side
