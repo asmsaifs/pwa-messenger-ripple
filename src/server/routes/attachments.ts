@@ -65,15 +65,20 @@ attachmentsRoute.post('/sign', async (c) => {
   const input = signAttachmentInputSchema.parse(await c.req.json());
   await policy.assertCanSignAttachmentUpload(c.env, actor, input.conversationId, input.size);
 
+  // Strip MIME parameters (e.g. MediaRecorder's `audio/webm;codecs=opus`) —
+  // the magic-byte sniffer at `/complete` only ever returns a bare type, so
+  // the stored `mimeType` must match that shape or every such upload fails
+  // its own consistency check.
+  const contentType = (input.contentType.split(';')[0] ?? input.contentType).trim();
   const id = uuidv7();
-  const ext = EXT_BY_CONTENT_TYPE[input.contentType] ?? 'bin';
+  const ext = EXT_BY_CONTENT_TYPE[contentType] ?? 'bin';
   const key = `att/${input.conversationId}/${id}.${ext}`;
 
   await attachmentsRepo.createPendingAttachment(c.env, actor, {
     id,
     conversationId: input.conversationId,
     r2Key: key,
-    mimeType: input.contentType,
+    mimeType: contentType,
     byteSize: input.size,
     originalName: input.name,
   });

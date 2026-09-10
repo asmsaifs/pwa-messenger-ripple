@@ -42,13 +42,12 @@ export async function uploadAttachment(
 
   let putRes: Response;
   try {
-    putRes = await fetch(uploadUrl, {
-      method: 'PUT',
-      body: file,
-      headers: { 'Content-Length': String(file.size) },
-    });
+    putRes = await fetch(uploadUrl, { method: 'PUT', body: file });
   } catch {
-    throw new ApiError('net/offline', "You're offline.");
+    if (!navigator.onLine) {
+      throw new ApiError('net/offline', "You're offline.");
+    }
+    throw new ApiError('upload/mismatch', "That file didn't upload correctly — try again.");
   }
   if (!putRes.ok) {
     throw new ApiError('upload/mismatch', "That file didn't upload correctly — try again.");

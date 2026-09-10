@@ -1,8 +1,12 @@
 # docs/05 §4 — static assets are served directly by the Static Assets
 # binding, which never runs src/server/middleware/csp.ts, so the same policy
 # is mirrored here. Keep the two in sync by hand if the policy ever changes.
+# R2_ACCOUNT_ID (21408569f7e7d8f7c81231eb197fae15) is hardcoded here — unlike
+# csp.ts it can't read env.R2_ACCOUNT_ID at request time, but it's the same
+# real Cloudflare account across staging/prod (only MEDIA_BUCKET_NAME
+# differs), so one value covers both.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://21408569f7e7d8f7c81231eb197fae15.r2.cloudflarestorage.com; media-src 'self' blob: https://21408569f7e7d8f7c81231eb197fae15.r2.cloudflarestorage.com; connect-src 'self' https://21408569f7e7d8f7c81231eb197fae15.r2.cloudflarestorage.com https://*.ingest.sentry.io; font-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
