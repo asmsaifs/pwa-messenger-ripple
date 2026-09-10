@@ -3,3 +3,25 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
+
+/* M15 dark mode: a manual `.dark` class on <html>, toggled by
+   src/client/lib/theme.tsx, rather than Tailwind 4's default
+   `prefers-color-scheme`-only `dark:` variant — the Settings toggle needs a
+   third "system" state that still has to win over the OS preference when the
+   user picks light/dark explicitly, which a media-query-only variant can't
+   express. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: white;
+  color: black;
+}
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}

@@ -98,3 +98,11 @@ export async function listPendingOlderThan(env: Env, cutoffMs: number) {
   });
   return rows.filter((r) => r.createdAt < cutoffMs);
 }
+
+// System caller (account export/purge, docs/05 §9) — every attachment this
+// user ever uploaded, across every conversation, so the R2 bytes can be
+// exported/deleted by key before the D1 cascade removes these rows.
+export async function listByUploader(env: Env, uploaderId: string) {
+  const db = getDb(env);
+  return db.query.attachments.findMany({ where: eq(attachments.uploaderId, uploaderId) });
+}

@@ -26,6 +26,7 @@ export const pushPayloadTypeSchema = z.enum([
   'friend_accepted',
   'call',
   'call_cancelled',
+  'export_ready',
 ]);
 export type PushPayloadType = z.infer<typeof pushPayloadTypeSchema>;
 

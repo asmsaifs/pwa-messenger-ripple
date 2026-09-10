@@ -44,6 +44,7 @@ const STATUS_FOR_CODE: Record<AppErrorCode, ContentfulStatusCode> = {
   'upload/mismatch': 422,
   'ws/stale-seq': 409,
   'ws/backpressure': 429,
+  'account/deletion-pending': 403,
 };
 
 // Enumeration rule (docs/02 §5): "not visible to you" is always `policy/not-found`,

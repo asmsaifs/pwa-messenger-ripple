@@ -214,6 +214,20 @@ export class UserDO extends DurableObject<Env> {
     return this.totalUnread();
   }
 
+  // Account-deletion purge (docs/05 §9, M15): this DO is 1:1 with the user,
+  // so wiping its storage is the whole job — unlike ConversationDO, which is
+  // shared with the other member and needs per-user tombstoning instead of a
+  // full wipe. Closes any live sockets first so a stale tab doesn't keep
+  // writing to `state` after storage is gone.
+  async purge(): Promise<void> {
+    await this.loaded;
+    for (const ws of this.ctx.getWebSockets()) ws.close(1000, 'account deleted');
+    await this.ctx.storage.deleteAll();
+    this.presenceState = 'offline';
+    this.lastSeenAt = 0;
+    this.unread = {};
+  }
+
   // ── alarm: idle-socket sweep only (no D1 writer here, unlike ConversationDO) ──
   override async alarm(): Promise<void> {
     const now = Date.now();

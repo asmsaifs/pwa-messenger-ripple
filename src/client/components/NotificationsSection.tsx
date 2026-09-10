@@ -14,9 +14,9 @@ export function NotificationsSection() {
 
   if (!pushSupported()) {
     return (
-      <section className="mt-6 border-t border-slate-200 pt-6">
+      <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
         <h2 className="text-sm font-semibold">Notifications</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Not supported in this browser.
         </p>
       </section>
@@ -27,9 +27,9 @@ export function NotificationsSection() {
   const isOn = permission === 'granted' && subscribed.data === true;
 
   return (
-    <section className="mt-6 border-t border-slate-200 pt-6">
+    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
       <h2 className="text-sm font-semibold">Notifications</h2>
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
         {permission === 'denied'
           ? 'Blocked in browser settings — re-enable it there to get notified.'
           : isOn

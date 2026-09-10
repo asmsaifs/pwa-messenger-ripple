@@ -101,6 +101,33 @@ describe('friends routes', () => {
     expect(allowedUnblock.status).toBe(204);
   });
 
+  it('a blocked friendship shows in the blocker\'s "blocked" list, not the blocked party\'s any list', async () => {
+    const a = await signUpAndVerify('block-list-a@example.com', 'A');
+    const bCookie = await signUpAndVerify('block-list-b@example.com', 'B');
+    await post('/api/friends/invite', a, { email: 'block-list-b@example.com' });
+
+    const aList = await SELF.fetch(`${BASE}/api/friends`, { headers: { Cookie: a } });
+    const { outgoing } = await aList.json<{ outgoing: { friendshipId: string }[] }>();
+    const friendshipId = outgoing[0]!.friendshipId;
+    await post(`/api/friends/${friendshipId}/accept`, bCookie);
+    await post(`/api/friends/${friendshipId}/block`, a);
+
+    const aAfter = await SELF.fetch(`${BASE}/api/friends`, { headers: { Cookie: a } });
+    const aBody = await aAfter.json<{ blocked: { friendshipId: string }[]; friends: unknown[] }>();
+    expect(aBody.blocked.map((r) => r.friendshipId)).toContain(friendshipId);
+    expect(aBody.friends).toHaveLength(0);
+
+    const bAfter = await SELF.fetch(`${BASE}/api/friends`, { headers: { Cookie: bCookie } });
+    const bBody = await bAfter.json<{
+      blocked: unknown[];
+      friends: unknown[];
+      incoming: unknown[];
+      outgoing: unknown[];
+    }>();
+    expect(bBody.blocked).toHaveLength(0);
+    expect(bBody.friends).toHaveLength(0);
+  });
+
   it('the 11th invite in a day is rate limited', async () => {
     const inviter = await signUpAndVerify('rate-limited@example.com', 'Limited');
     for (let i = 0; i < 10; i++) {

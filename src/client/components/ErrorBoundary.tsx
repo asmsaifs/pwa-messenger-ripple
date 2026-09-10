@@ -1,8 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { captureException } from '../lib/sentry';
 import { Button } from './ui/button';
 
-// docs/04 §4: "global boundary sends to Sentry with a Reload CTA." Sentry
-// wiring is a M15 deliverable — this is the boundary shape it plugs into.
+// docs/04 §4: "global boundary sends to Sentry with a Reload CTA."
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   override state: { error: Error | null } = { error: null };
 
@@ -12,6 +12,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
 
   override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack);
+    captureException(error, { componentStack: info.componentStack });
   }
 
   override render() {

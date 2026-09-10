@@ -4,7 +4,9 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { captcha } from 'better-auth/plugins';
 import zxcvbn from 'zxcvbn';
 import { getDb } from '../repos/db';
+import { getPendingDeletion } from '../repos/account';
 import { createProfile } from '../repos/profiles';
+import { findUserByEmail } from '../repos/users';
 import { logAuthEmail } from './mail';
 import * as schema from '../repos/schema';
 import type { Env } from '../env';
@@ -131,7 +133,7 @@ export function createAuth(env: Env) {
     },
 
     hooks: {
-      before: createAuthMiddleware((ctx) => {
+      before: createAuthMiddleware(async (ctx) => {
         const field = PASSWORD_STRENGTH_PATHS[ctx.path];
         const password = field ? (ctx.body as Record<string, unknown>)?.[field] : undefined;
         if (typeof password === 'string' && zxcvbn(password).score < 2) {
@@ -140,7 +142,25 @@ export function createAuth(env: Env) {
             code: 'WEAK_PASSWORD',
           });
         }
-        return Promise.resolve();
+
+        // docs/05 §9: a scheduled-for-deletion account is immediately
+        // unusable, not just "eventually purged" — session revocation at
+        // `DELETE /api/account` handles every device already signed in;
+        // this closes the other half (a fresh sign-in before the 30-day
+        // purge cron runs).
+        if (ctx.path === '/sign-in/email') {
+          const email = (ctx.body as Record<string, unknown> | undefined)?.email;
+          if (typeof email === 'string') {
+            const existingUser = await findUserByEmail(env, email);
+            const pending = existingUser ? await getPendingDeletion(env, existingUser.id) : undefined;
+            if (pending) {
+              throw new APIError('FORBIDDEN', {
+                message: 'This account is scheduled for deletion.',
+                code: 'ACCOUNT_DELETION_PENDING',
+              });
+            }
+          }
+        }
       }),
     },
 

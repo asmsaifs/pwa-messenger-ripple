@@ -72,8 +72,14 @@ async function notifyAndMaybePush(
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 const INVITE_EXPIRY_MS = 7 * ONE_DAY_MS;
 const INVITE_DAILY_LIMIT = 10; // docs/05 §8, docs/09 M5 exit criteria
+// docs/05 §8 "abuse controls" — friendship-response/block actions weren't in
+// the original table but are cheap to spam-click; generous caps just stop
+// scripted flapping, not normal use.
+const FRIENDSHIP_RESPONSE_HOURLY_LIMIT = 60;
+const BLOCK_HOURLY_LIMIT = 30;
 
 // Narrows a friendship+profile row down to ones whose profile actually
 // resolved, without an `!` assertion at each call site below.
@@ -121,10 +127,22 @@ friendsRoute.get('/', async (c) => {
       createdAt: row.friendship.createdAt,
     }));
 
+  // Only the side who set the block sees it here (docs/02 §5 enumeration
+  // rule) — the blocked party never learns they've been blocked.
+  const blocked = withProfiles
+    .filter((row) => row.friendship.status === 'blocked' && row.friendship.blockedBy === actor.userId)
+    .map((row) => ({
+      friendshipId: row.friendship.id,
+      userId: row.otherUserId,
+      displayName: row.profile.displayName,
+      avatarKey: row.profile.avatarKey,
+    }));
+
   const body = friendsResponseSchema.parse({
     friends,
     incoming,
     outgoing,
+    blocked,
     invitations: invitations.map((inv) => ({
       id: inv.id,
       email: inv.email,
@@ -208,6 +226,13 @@ friendsRoute.post('/invite', async (c) => {
 friendsRoute.post('/:id/accept', async (c) => {
   const actor = c.get('actor');
   const id = c.req.param('id');
+  await takeRateLimit(
+    c.env,
+    actor.userId,
+    'friend-respond',
+    FRIENDSHIP_RESPONSE_HOURLY_LIMIT,
+    ONE_HOUR_MS,
+  );
   const friendship = await policy.assertCanRespondToFriendship(c.env, actor, id);
   const { conversation } = await friendsRepo.acceptFriendship(c.env, actor, id);
   if (!conversation) throw new Error('accept did not produce a conversation');
@@ -233,6 +258,13 @@ friendsRoute.post('/:id/accept', async (c) => {
 friendsRoute.post('/:id/decline', async (c) => {
   const actor = c.get('actor');
   const id = c.req.param('id');
+  await takeRateLimit(
+    c.env,
+    actor.userId,
+    'friend-respond',
+    FRIENDSHIP_RESPONSE_HOURLY_LIMIT,
+    ONE_HOUR_MS,
+  );
   await policy.assertCanRespondToFriendship(c.env, actor, id);
   await friendsRepo.declineFriendship(c.env, actor, id);
   return c.body(null, 204);
@@ -241,6 +273,7 @@ friendsRoute.post('/:id/decline', async (c) => {
 friendsRoute.post('/:id/block', async (c) => {
   const actor = c.get('actor');
   const id = c.req.param('id');
+  await takeRateLimit(c.env, actor.userId, 'friend-block', BLOCK_HOURLY_LIMIT, ONE_HOUR_MS);
   await policy.assertCanBlockFriendship(c.env, actor, id);
   await friendsRepo.blockFriendship(c.env, actor, id);
   return c.body(null, 204);
@@ -249,6 +282,7 @@ friendsRoute.post('/:id/block', async (c) => {
 friendsRoute.post('/:id/unblock', async (c) => {
   const actor = c.get('actor');
   const id = c.req.param('id');
+  await takeRateLimit(c.env, actor.userId, 'friend-block', BLOCK_HOURLY_LIMIT, ONE_HOUR_MS);
   await policy.assertCanUnblockFriendship(c.env, actor, id);
   await friendsRepo.unblockFriendship(c.env, actor, id);
   return c.body(null, 204);

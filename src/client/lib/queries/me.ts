@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { meResponseSchema } from '@shared/me';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { meResponseSchema, type MeResponse, type UpdateMeInput } from '@shared/me';
 import { apiFetch, ApiError } from '../api';
 
 export const meQueryKey = ['me'] as const;
@@ -19,4 +19,17 @@ export function useMe() {
 export function useInvalidateMe() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: meQueryKey });
+}
+
+export function useUpdateMe() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: UpdateMeInput) =>
+      apiFetch('/api/me', meResponseSchema.shape.profile, { method: 'PATCH', body: patch }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(meQueryKey, (prev: MeResponse | undefined) =>
+        prev ? { ...prev, profile } : prev,
+      );
+    },
+  });
 }

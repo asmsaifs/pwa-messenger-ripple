@@ -267,6 +267,42 @@ export const pushSubscriptions = sqliteTable(
   (t) => [index('idx_push_user').on(t.userId)],
 );
 
+// ── account deletion (docs/05 §9): grace-period row created on `DELETE
+// /api/account`, swept by a daily cron once `purge_at` is due. One row per
+// user — a fresh delete request while one is already pending just re-reads
+// the existing row (see repos/account.ts).
+export const accountDeletions = sqliteTable('account_deletions', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  requestedAt: integer('requested_at').notNull(),
+  purgeAt: integer('purge_at').notNull(),
+  status: text('status').notNull().default('pending'),
+}, (t) => [
+  index('idx_acct_del_purge_at').on(t.status, t.purgeAt),
+  check('chk_acct_del_status', sql`${t.status} IN ('pending','purged')`),
+]);
+
+// ── account export jobs (docs/03 `POST /api/account/export`)
+export const exportJobs = sqliteTable(
+  'export_jobs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    r2Key: text('r2_key'),
+    error: text('error'),
+    requestedAt: integer('requested_at').notNull(),
+    completedAt: integer('completed_at'),
+  },
+  (t) => [
+    index('idx_export_user').on(t.userId, t.requestedAt),
+    check('chk_export_status', sql`${t.status} IN ('pending','ready','failed')`),
+  ],
+);
+
 // ── abuse
 export const reports = sqliteTable('reports', {
   id: text('id').primaryKey(),

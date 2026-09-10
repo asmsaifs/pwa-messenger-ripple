@@ -11,6 +11,7 @@ import {
   switchInputDevice,
   toggleMute,
 } from '../lib/webrtc/callSession';
+import { getPreferredOutputDeviceId } from '../lib/audioDevicePrefs';
 
 function formatElapsed(startedAt: number, now: number): string {
   const total = Math.max(0, Math.floor((now - startedAt) / 1000));
@@ -60,7 +61,21 @@ export function CallPage() {
     if (status !== 'active') return;
     navigator.mediaDevices
       .enumerateDevices()
-      .then((list) => setDevices(list.filter((d) => d.kind === 'audioinput' || d.kind === 'audiooutput')))
+      .then((list) => {
+        const audioDevices = list.filter((d) => d.kind === 'audioinput' || d.kind === 'audiooutput');
+        setDevices(audioDevices);
+        // Settings' "Audio devices" preference (docs/04) — applied once per
+        // call if the picked speaker is still present; a removed device just
+        // leaves the browser default in place.
+        const preferredOutput = getPreferredOutputDeviceId();
+        if (
+          preferredOutput &&
+          audioRef.current &&
+          audioDevices.some((d) => d.kind === 'audiooutput' && d.deviceId === preferredOutput)
+        ) {
+          void setOutputDevice(audioRef.current, preferredOutput);
+        }
+      })
       .catch(() => setDevices([]));
   }, [status]);
 

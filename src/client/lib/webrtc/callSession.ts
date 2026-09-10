@@ -5,6 +5,7 @@ import { connectCallSocket, type CallSocketHandle } from '../ws/callSocket';
 import { getCallAudioConstraints, applyAudioEncoderPrefs, CallPeerConnection } from './peerConnection';
 import { useCallStore, resetCallStore } from '../../store/callStore';
 import { messageForErrorCode } from '../errors/messages';
+import { getPreferredInputDeviceId } from '../audioDevicePrefs';
 import { ApiError } from '../api';
 
 // Module-level singleton (docs/10 §5 anti-pattern list, docs/04
@@ -224,7 +225,7 @@ function formatDuration(seconds: number): string {
   return `${mm}:${ss.toString().padStart(2, '0')}`;
 }
 
-async function acquireMicrophone(deviceId?: string): Promise<MediaStream> {
+async function acquireMicrophone(deviceId: string | undefined = getPreferredInputDeviceId()): Promise<MediaStream> {
   try {
     return await navigator.mediaDevices.getUserMedia(getCallAudioConstraints(deviceId));
   } catch (err) {

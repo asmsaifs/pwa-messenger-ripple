@@ -165,4 +165,33 @@ describe('ConversationDO', () => {
     expect(stats1.count).toBe(1);
     expect(stats2.count).toBe(0);
   });
+
+  it('purgeUser redacts only that sender\'s messages, leaves the other member\'s intact', async () => {
+    const g = await seedFriendGraph(env);
+    const stub = stubFor(g.conversationId);
+    await stub.appendMessage({ clientId: 'pu1', senderId: g.userA, kind: 'text', body: 'from a', conversationId: g.conversationId });
+    await stub.appendMessage({ clientId: 'pu2', senderId: g.userB, kind: 'text', body: 'from b', conversationId: g.conversationId });
+
+    const result = await stub.purgeUser(g.userA);
+    expect(result.redacted).toBe(1);
+
+    const rows = await stub.listMessages(null, 10);
+    const fromA = rows.find((m: Message) => m.senderId === g.userA)!;
+    const fromB = rows.find((m: Message) => m.senderId === g.userB)!;
+    expect(fromA.body).toBeNull();
+    expect(fromA.deletedAt).not.toBeNull();
+    expect(fromB.body).toBe('from b');
+    expect(fromB.deletedAt).toBeNull();
+  });
+
+  it('exportMessagesFor returns only the requested user\'s own messages', async () => {
+    const g = await seedFriendGraph(env);
+    const stub = stubFor(g.conversationId);
+    await stub.appendMessage({ clientId: 'ex1', senderId: g.userA, kind: 'text', body: 'mine', conversationId: g.conversationId });
+    await stub.appendMessage({ clientId: 'ex2', senderId: g.userB, kind: 'text', body: 'not mine', conversationId: g.conversationId });
+
+    const exported = await stub.exportMessagesFor(g.userA);
+    expect(exported).toHaveLength(1);
+    expect(exported[0]!.body).toBe('mine');
+  });
 });

@@ -115,6 +115,15 @@ export async function markCallMissedDirect(env: Env, callId: string): Promise<vo
     .where(and(eq(calls.id, callId), eq(calls.status, 'ringing')));
 }
 
+// Account export (docs/05 §9) — every call this user was ever part of,
+// across every conversation, not just one (unlike `listCallsForConversation`).
+export async function listCallsForUser(env: Env, actor: Actor) {
+  const db = getDb(env);
+  return db.query.calls.findMany({
+    where: or(eq(calls.callerId, actor.userId), eq(calls.calleeId, actor.userId)),
+  });
+}
+
 export async function listCallsForConversation(
   env: Env,
   actor: Actor,

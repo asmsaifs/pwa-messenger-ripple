@@ -1,12 +1,29 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
+import pkg from './package.json' with { type: 'json' };
+
+// Settings' About section (docs/04) wants a build sha, which npm/package.json
+// alone can't give — read from git at build time, falling back to 'dev' for
+// a checkout with no git history (a downloaded tarball, some CI caches).
+function buildSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'dev';
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
   root: 'src/client',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_BUILD_SHA__: JSON.stringify(buildSha()),
+  },
   publicDir: path.resolve(__dirname, 'public'),
   plugins: [
     react(),

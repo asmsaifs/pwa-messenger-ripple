@@ -8,6 +8,12 @@
     <link rel="apple-touch-icon" href="/icons/192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Ripple</title>
+    <!-- Applies the saved theme before first paint — avoids a flash of the
+         wrong theme that a React effect (src/client/lib/theme.tsx) would
+         otherwise cause, since that only runs after mount. An external file,
+         not an inline <script>, because docs/05 §4's CSP has no
+         'unsafe-inline' in script-src. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

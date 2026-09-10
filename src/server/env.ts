@@ -73,4 +73,11 @@ export interface Env {
   // call end: blobs [end_reason, relayed, region], doubles [setup_ms,
   // duration_s, avg_rtt_ms, loss_pct], index = hashed user id.
   ANALYTICS: AnalyticsEngineDataset;
+  // `export-queue` producer binding (M15, docs/03 "Data") — mirrors
+  // PUSH_QUEUE's shape; src/server/export/consumer.ts validates the real
+  // job shape with `exportJobSchema` on the way out.
+  EXPORT_QUEUE: Queue<unknown>;
+  // Sentry (M15, docs/05 §10 secrets inventory). Optional: absent in local
+  // dev/tests, where error reporting just no-ops (src/server/lib/sentry.ts).
+  SENTRY_DSN?: string;
 }

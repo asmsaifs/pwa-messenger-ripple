@@ -94,4 +94,16 @@ describe('UserDO', () => {
     const fired = await runDurableObjectAlarm(stub);
     expect(fired).toBe(false);
   });
+
+  it('purge wipes storage — presence and unread both reset', async () => {
+    const stub = stubFor('purge-user');
+    await stub.bumpUnread('conv-a');
+    expect(await stub.unreadTotal()).toBe(1);
+
+    await stub.purge();
+
+    expect(await stub.unreadTotal()).toBe(0);
+    const presence = await stub.presence();
+    expect(presence.state).toBe('offline');
+  });
 });

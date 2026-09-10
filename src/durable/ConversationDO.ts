@@ -563,6 +563,41 @@ export class ConversationDO extends DurableObject<Env> {
     return message;
   }
 
+  // Account-deletion redaction (docs/05 §9, M15). Unlike UserDO.purge(), this
+  // can't wipe the whole DO — the other member's messages live here too — so
+  // it tombstones only this user's own rows the same way `deleteMessage`
+  // already does (body/attachment cleared, `deleted_at` set), and closes any
+  // live sockets this user still has open on this conversation.
+  purgeUser(userId: string): { redacted: number } {
+    const now = Date.now();
+    const rows = [
+      ...this.ctx.storage.sql.exec<MessageRow>(
+        `UPDATE messages SET deleted_at = ?, body = NULL, attachment_id = NULL
+         WHERE sender_id = ? AND deleted_at IS NULL RETURNING *`,
+        now,
+        userId,
+      ),
+    ];
+    for (const row of rows) this.broadcast({ t: 'message', message: rowToMessage(row) });
+    for (const ws of this.ctx.getWebSockets(`user:${userId}`)) {
+      ws.close(4003, 'account deleted');
+    }
+    return { redacted: rows.length };
+  }
+
+  // Read-only dump for `POST /api/account/export` (docs/03 §"Data"). Only
+  // this user's own messages — the export is "everything about me", not a
+  // full copy of a conversation the other member also owns.
+  exportMessagesFor(userId: string): Message[] {
+    const rows = [
+      ...this.ctx.storage.sql.exec<MessageRow>(
+        `SELECT * FROM messages WHERE sender_id = ? ORDER BY seq ASC`,
+        userId,
+      ),
+    ];
+    return rows.map(rowToMessage);
+  }
+
   // ── alarm: debounced D1 preview flush + idle-socket sweep ───────────────
   // One alarm serves both jobs (CLAUDE.md/DO convention: one alarm per DO).
   // `appendMessage` calling `setAlarm` on every insert pushes any pending

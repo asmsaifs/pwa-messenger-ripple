@@ -22,6 +22,9 @@ export default tseslint.config(
       'node_modules',
       'coverage',
       'worker-configuration.d.ts',
+      // Static assets served as-is by Static Assets/the PWA — not part of any
+      // tsconfig project, so typescript-eslint's projectService can't parse them.
+      'public/**',
     ],
   },
 

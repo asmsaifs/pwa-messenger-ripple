@@ -1,6 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import { AppError } from '../errors';
 import { createAuth } from '../lib/auth';
+import { getPendingDeletion } from '../repos/account';
 import type { Env } from '../env';
 import type { Actor } from '../types';
 
@@ -24,6 +25,15 @@ export const requireAuth = createMiddleware<{
 }>(async (c, next) => {
   const session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
   if (!session) throw new AppError('auth/unauthenticated');
+
+  // Defense in depth alongside the `/sign-in/email` hook (src/server/lib/
+  // auth.ts) and `DELETE /api/account`'s session revocation — catches the
+  // narrow window where a session survived a revocation that failed
+  // silently (docs/05 §9: a scheduled-for-deletion account must be
+  // immediately unusable, not just eventually purged). A single indexed
+  // point read (`account_deletions` PK is `user_id`), not a join.
+  const pendingDeletion = await getPendingDeletion(c.env, session.user.id);
+  if (pendingDeletion) throw new AppError('account/deletion-pending');
 
   c.set('actor', {
     userId: session.user.id,

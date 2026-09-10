@@ -83,6 +83,14 @@
   // to exercise an actual browser upload locally).
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "ripple-media-local" }],
 
+  // Analytics Engine (M13/M15, docs/07 §8) — `call_metrics` data points.
+  // env.ts already typed `ANALYTICS: AnalyticsEngineDataset` and CallDO wrote
+  // to it since M13, but the actual binding was missing here — a gap this
+  // milestone's "metrics dashboard" item closes; the write itself has always
+  // been best-effort/try-caught, so this only makes it actually land instead
+  // of silently no-op'ing on `env.ANALYTICS` being undefined.
+  "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "call_metrics" }],
+
   // `push-queue` (M12, docs/03 §4, docs/08 §2). Producer: ConversationDO +
   // friend routes (fan-out to offline members). Consumer:
   // src/server/push/consumer.ts, wired in src/server/index.ts's `queue()`
@@ -91,8 +99,16 @@
   // exists purely as the `dead_letter_queue` landing spot for messages that
   // exhausted `max_retries`, inspectable via `wrangler queues consumer` /
   // the dashboard.
+  // `export-queue` (M15, docs/03 "Data": `POST /api/account/export`).
+  // Producer: src/server/lib/export-queue.ts. Consumer:
+  // src/server/export/consumer.ts, wired in src/server/index.ts's `queue()`
+  // export — mirrors `push-queue`'s shape exactly, including the
+  // no-consumer-binding-needed DLQ.
   "queues": {
-    "producers": [{ "binding": "PUSH_QUEUE", "queue": "push-queue" }],
+    "producers": [
+      { "binding": "PUSH_QUEUE", "queue": "push-queue" },
+      { "binding": "EXPORT_QUEUE", "queue": "export-queue" },
+    ],
     "consumers": [
       {
         "queue": "push-queue",
@@ -101,6 +117,13 @@
         "max_retries": 3,
         "dead_letter_queue": "push-dlq",
       },
+      {
+        "queue": "export-queue",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "export-dlq",
+      },
     ],
   },
 
@@ -108,8 +131,9 @@
   // attachments stuck `pending` >24h (abandoned uploads — the client never
   // called `/complete`). `*/5` (M13) marks `ringing` calls with no live DO
   // alarm as `missed` (belt-and-braces — see src/server/lib/call-sweep.ts).
-  // Other cron jobs in docs/03 §5 belong to later milestones.
-  "triggers": { "crons": ["*/10 * * * *", "*/5 * * * *"] },
+  // `0 4 * * *` (M15, docs/05 §9, docs/03 §5) purges `account_deletions` rows
+  // whose 30-day grace period has passed.
+  "triggers": { "crons": ["*/10 * * * *", "*/5 * * * *", "0 4 * * *"] },
 
   // Cloudflare Email Sending (M5) — invite emails. No `send_email` binding
   // here yet: the pinned wrangler/Miniflare version in this repo (3.114.17)

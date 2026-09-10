@@ -274,3 +274,27 @@ export const assertCanReadCallHistory = assertCanActOnCall;
 export function assertCanRegisterPushSub(actor: Actor, ownerId: string) {
   assertSelf(actor, ownerId);
 }
+
+// ── Devices (Better Auth sessions) ─────────────────────────────────────────
+// The listing itself is inherently self-scoped (Better Auth's `listSessions`
+// derives the owner from the request's own session headers — there's no way
+// to ask it for another user's sessions), so this is defense in depth on the
+// revoke path: re-checked against the row the route already looked up.
+export function assertSessionRevocable(actor: Actor, sessionUserId: string) {
+  assertSelf(actor, sessionUserId);
+}
+
+// ── Account export / deletion ───────────────────────────────────────────
+// Both `POST /api/account/export` and `DELETE /api/account` only ever act on
+// `actor.userId` — there's no separate target id to check, unlike
+// `assertProfileUpdatable` — so there's nothing to verify beyond "this actor
+// is authenticated", already true by the time policy runs. Kept as
+// placeholders (matching `assertCanSetReadMarker`'s precedent) so the route
+// still calls into policy per docs/07 §2's route-coverage convention.
+export function assertAccountExportable(actor: Actor) {
+  void actor;
+}
+
+export function assertAccountDeletable(actor: Actor) {
+  void actor;
+}

@@ -28,6 +28,7 @@ const MESSAGES: Record<ClientErrorCode, string> = {
   'upload/mismatch': "That file didn't upload correctly — try again.",
   'ws/stale-seq': 'Catching up on missed messages…',
   'ws/backpressure': 'Connection is busy — try again in a moment.',
+  'account/deletion-pending': 'This account is scheduled for deletion.',
   internal: 'Something went wrong on our end.',
 };
 

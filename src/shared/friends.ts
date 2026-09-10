@@ -26,16 +26,28 @@ const invitationSummarySchema = z.object({
   expiresAt: z.number(),
 });
 
+// A blocked row only shows an "unblock" affordance to the user who set the
+// block (`blockedByMe`) — the other side never sees they've been blocked
+// (docs/02 §5 enumeration rule), so this list is inherently "blocked by me".
+const blockedSummarySchema = z.object({
+  friendshipId: z.string(),
+  userId: z.string(),
+  displayName: z.string(),
+  avatarKey: z.string().nullable(),
+});
+
 export const friendsResponseSchema = z.object({
   friends: z.array(friendSummarySchema),
   incoming: z.array(friendRequestSchema),
   outgoing: z.array(friendRequestSchema),
   invitations: z.array(invitationSummarySchema),
+  blocked: z.array(blockedSummarySchema),
 });
 export type FriendsResponse = z.infer<typeof friendsResponseSchema>;
 export type FriendSummary = z.infer<typeof friendSummarySchema>;
 export type FriendRequestSummary = z.infer<typeof friendRequestSchema>;
 export type InvitationSummary = z.infer<typeof invitationSummarySchema>;
+export type BlockedSummary = z.infer<typeof blockedSummarySchema>;
 
 // POST /api/friends/invite. Single entry point for "add someone by email" —
 // the server decides whether that's a friend request (already registered) or

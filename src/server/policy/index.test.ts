@@ -423,4 +423,14 @@ describe('policy', () => {
       expect(() => policy.assertCanRegisterPushSub(g.actorA, g.userB)).toThrow(AppError);
     });
   });
+
+  describe('assertSessionRevocable', () => {
+    it('allow: self', () => {
+      expect(() => policy.assertSessionRevocable(g.actorA, g.userA)).not.toThrow();
+    });
+
+    it('deny: another user\'s session', () => {
+      expect(() => policy.assertSessionRevocable(g.actorA, g.userB)).toThrow(AppError);
+    });
+  });
 });

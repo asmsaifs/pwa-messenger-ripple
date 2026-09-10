@@ -28,6 +28,7 @@ export const APP_ERROR_CODES = [
   'upload/mismatch',
   'ws/stale-seq',
   'ws/backpressure',
+  'account/deletion-pending',
 ] as const;
 
 export type AppErrorCode = (typeof APP_ERROR_CODES)[number];
