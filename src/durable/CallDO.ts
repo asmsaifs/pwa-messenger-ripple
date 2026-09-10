@@ -122,12 +122,25 @@ export class CallDO extends DurableObject<Env> {
   }
 
   // ── RPC: create (docs/03 §3) ─────────────────────────────────────────────
-  async create(input: { callerId: string; calleeId: string; conversationId: string }): Promise<void> {
+  // `callId` must be the D1 `calls.id` (UUIDv7) the route already minted —
+  // NOT `this.ctx.id.toString()`. This DO is addressed via
+  // `idFromName(callId)`, and `idFromName` hashes the name into an unrelated
+  // 64-hex DO id; `this.ctx.id.toString()` returns *that* hash, not the
+  // original name. Every `updateCallStatus(..., this.state.callId, ...)`
+  // call below writes against `this.state.callId`, so if that ever drifted
+  // back to the DO's own id, those updates would silently match zero D1 rows
+  // (`getOpenCall` would then see the row stuck in `ringing`/`active`
+  // forever — a permanent false `call/busy`).
+  async create(input: {
+    callId: string;
+    callerId: string;
+    calleeId: string;
+    conversationId: string;
+  }): Promise<void> {
     await this.loaded;
     if (this.state) return; // idempotent: a retried route call must not reset an in-flight call
-    const callId = this.ctx.id.toString();
     this.state = {
-      callId,
+      callId: input.callId,
       conversationId: input.conversationId,
       callerId: input.callerId,
       calleeId: input.calleeId,
@@ -144,7 +157,7 @@ export class CallDO extends DurableObject<Env> {
     if (hasLiveSocket) {
       await this.notifyUserDO(input.calleeId, {
         t: 'incoming_call',
-        callId,
+        callId: input.callId,
         conversationId: input.conversationId,
         from,
       });
@@ -157,8 +170,8 @@ export class CallDO extends DurableObject<Env> {
             type: 'call',
             title: from.displayName,
             body: 'Incoming call',
-            tag: `call-${callId}`,
-            data: { url: `/call/${callId}` },
+            tag: `call-${input.callId}`,
+            data: { url: `/call/${input.callId}` },
           },
           { urgency: 'high', ttl: 30 },
         );

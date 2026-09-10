@@ -86,6 +86,7 @@ callsRoute.post('/', async (c) => {
     calleeId: callee,
   });
   await callStub(c.env, row.id).create({
+    callId: row.id,
     callerId: actor.userId,
     calleeId: callee,
     conversationId: input.conversationId,

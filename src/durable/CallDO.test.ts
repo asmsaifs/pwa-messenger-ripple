@@ -24,7 +24,7 @@ async function startCall(g: Awaited<ReturnType<typeof seedFriendGraph>>) {
     calleeId: g.userB,
   });
   const stub = stubFor(row.id);
-  await stub.create({ callerId: g.userA, calleeId: g.userB, conversationId: g.conversationId });
+  await stub.create({ callId: row.id, callerId: g.userA, calleeId: g.userB, conversationId: g.conversationId });
   return { callId: row.id, stub };
 }
 
@@ -117,7 +117,7 @@ describe('CallDO', () => {
 
     // A second `create` for the same callId (e.g. a retried POST) must not
     // resurrect a resolved call back to `ringing`.
-    await stub.create({ callerId: g.userA, calleeId: g.userB, conversationId: g.conversationId });
+    await stub.create({ callId, callerId: g.userA, calleeId: g.userB, conversationId: g.conversationId });
 
     const row = await readCallRow(callId);
     expect(row?.status).toBe('declined');

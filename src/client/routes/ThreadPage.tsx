@@ -309,7 +309,7 @@ export function ThreadPage() {
             type="button"
             data-testid="call-button"
             onClick={() => void handleStartCall()}
-            disabled={!isOnline || callStatus !== 'idle'}
+            disabled={!isOnline || (callStatus !== 'idle' && callStatus !== 'ended')}
             title={!isOnline ? "You're offline" : undefined}
             className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Call"

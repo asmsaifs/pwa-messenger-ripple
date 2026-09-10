@@ -30,13 +30,23 @@ const PING_INTERVAL_MS = 30_000;
 export function connectCallSocket(callId: string, handlers: CallSocketHandlers): CallSocketHandle {
   const ws = new WebSocket(wsUrl(callId));
   let pingTimer: ReturnType<typeof setInterval> | null = null;
+  // A caller's `send()` can run before the handshake finishes — e.g.
+  // `acceptIncomingCall()` sends `{t:'accept'}` on the line right after
+  // `connectCallSocket()` returns, while `ws.readyState` is still
+  // `CONNECTING`. Queue until `open` instead of silently dropping.
+  const queue: CallSignalFrame[] = [];
 
   function send(frame: CallSignalFrame): void {
-    if (ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify(callSignalFrameSchema.parse(frame)));
+    const wire = callSignalFrameSchema.parse(frame);
+    if (ws.readyState !== WebSocket.OPEN) {
+      queue.push(wire);
+      return;
+    }
+    ws.send(JSON.stringify(wire));
   }
 
   ws.addEventListener('open', () => {
+    for (const frame of queue.splice(0)) ws.send(JSON.stringify(frame));
     pingTimer = setInterval(() => send({ t: 'ping' }), PING_INTERVAL_MS);
   });
   ws.addEventListener('message', (event) => {

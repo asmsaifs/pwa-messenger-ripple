@@ -194,6 +194,13 @@ function handleServerFrame(frame: CallServerFrame): void {
       void peerConnection?.onRemoteIceCandidate(frame.candidate as RTCIceCandidateInit | null);
       return;
     case 'accept':
+      // Only the caller receives this (CallDO's relay() excludes the
+      // sender), and only once, right after the callee's socket is
+      // definitely open — safe point to attach tracks and let
+      // `onnegotiationneeded` create the (now deliverable) offer.
+      if (useCallStore.getState().direction === 'outgoing' && localStream && peerConnection) {
+        attachLocalTracks(localStream);
+      }
       useCallStore.setState({ status: 'connecting' });
       return;
     case 'decline':
@@ -236,9 +243,24 @@ async function acquireMicrophone(deviceId: string | undefined = getPreferredInpu
   }
 }
 
+// `addTrack` fires `onnegotiationneeded`, which immediately creates+sends an
+// SDP offer — shared by both sides, but at different points in their flow
+// (see the caller-side deferral comment in `startOutgoingCall`).
+function attachLocalTracks(stream: MediaStream): void {
+  for (const track of stream.getTracks()) {
+    const sender = peerConnection!.pc.addTrack(track, stream);
+    void applyAudioEncoderPrefs(sender);
+  }
+}
+
 // ── Outgoing (docs/01 §4.3: caller is `polite=false`) ──────────────────────
 export async function startOutgoingCall(conversationId: string, peer: PublicProfile): Promise<void> {
-  if (useCallStore.getState().status !== 'idle') return; // one call at a time client-side too
+  // `ended` counts as available too — a prior call's "ended" screen is only
+  // dismissed by the user opening `/call/:id`, so without this a caller who
+  // hangs up and immediately redials from ThreadPage (never visiting that
+  // screen) would find the button permanently disabled until a refresh.
+  const currentStatus = useCallStore.getState().status;
+  if (currentStatus !== 'idle' && currentStatus !== 'ended') return; // one call at a time client-side too
   resetCallStore();
   useCallStore.setState({
     status: 'outgoing-ringing',
@@ -254,10 +276,15 @@ export async function startOutgoingCall(conversationId: string, peer: PublicProf
     localStream = stream;
     useCallStore.setState({ callId });
     setupPeerConnection(iceServers, false);
-    for (const track of stream.getTracks()) {
-      const sender = peerConnection!.pc.addTrack(track, stream);
-      void applyAudioEncoderPrefs(sender);
-    }
+    // Tracks (and the `negotiationneeded` offer they trigger) are attached
+    // only once the callee's `accept` frame arrives (see the 'accept' case
+    // in handleServerFrame), not here. `CallDO.relay()` only reaches
+    // sockets that are *currently connected* — no buffering — and the
+    // callee's socket doesn't exist yet while they're still ringing. An
+    // offer sent now would be silently dropped, yet would still leave this
+    // (impolite) peer's negotiation state at `have-local-offer`, so the
+    // callee's real offer (sent on accept) would later be ignored as a
+    // collision — a permanent "Connecting…" deadlock on both ends.
     socket = connectCallSocket(callId, {
       onFrame: handleServerFrame,
       onClose: () => {
@@ -273,7 +300,9 @@ export async function startOutgoingCall(conversationId: string, peer: PublicProf
 // ── Incoming (docs/03 §2.2's `incoming_call` UserDO frame; callee is
 // `polite=true`) — invoked from useUserSocket's message handler. ───────────
 export function handleIncomingCall(input: { callId: string; conversationId: string; from: PublicProfile }): void {
-  if (useCallStore.getState().status !== 'idle') return; // already on a call — server-side busy check covers the caller's view of this
+  const currentStatus = useCallStore.getState().status;
+  // `ended` counts as available too — see startOutgoingCall's comment.
+  if (currentStatus !== 'idle' && currentStatus !== 'ended') return; // already on a call — server-side busy check covers the caller's view of this
   resetCallStore();
   useCallStore.setState({
     status: 'incoming-ringing',
@@ -302,10 +331,7 @@ export async function acceptIncomingCall(): Promise<void> {
     const [stream, { iceServers }] = await Promise.all([acquireMicrophone(), fetchTurnCredentials()]);
     localStream = stream;
     setupPeerConnection(iceServers, true);
-    for (const track of stream.getTracks()) {
-      const sender = peerConnection!.pc.addTrack(track, stream);
-      void applyAudioEncoderPrefs(sender);
-    }
+    attachLocalTracks(stream);
     socket = connectCallSocket(callId, {
       onFrame: handleServerFrame,
       onClose: () => {
