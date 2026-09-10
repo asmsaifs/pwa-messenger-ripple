@@ -55,7 +55,8 @@ registerRoute(({ url }) => url.pathname.startsWith('/api/'), new NetworkOnly());
 // skipWaiting only on explicit user action (posted from the "Update available"
 // toast) — never auto-reload mid-call (docs/06 §2).
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
-  if (event.data === 'SKIP_WAITING') {
+  const data = event.data as { type?: string } | undefined;
+  if (data?.type === 'SKIP_WAITING') {
     void self.skipWaiting();
   }
 });
