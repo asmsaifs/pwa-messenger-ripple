@@ -302,14 +302,14 @@ export function ThreadPage() {
             <Avatar
               name={data.peer.displayName}
               avatarKey={data.peer.avatarKey}
-              presence="online"
+              presence={data.conversation.peerPresence}
               size="sm"
               className="hidden sm:inline-flex"
             />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-ink">{data.peer.displayName}</div>
               <div className="truncate text-xs text-ink-muted" data-testid="peer-status">
-                {typing?.userId === data.peer.userId ? 'typing…' : 'online'}
+                {typing?.userId === data.peer.userId ? 'typing…' : data.conversation.peerPresence}
               </div>
             </div>
           </>

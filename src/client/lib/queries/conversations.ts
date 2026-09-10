@@ -28,6 +28,11 @@ export function useConversation(id: string | undefined) {
     queryKey: conversationQueryKey(id ?? ''),
     queryFn: () => apiFetch(`/api/conversations/${id}`, conversationDetailResponseSchema),
     enabled: Boolean(id),
+    // `peerPresence` has no live push (UserDO doesn't fan out presence
+    // changes to friends' sockets, only its owner's own socket) — poll while
+    // this thread is open so the header dot doesn't go stale for the length
+    // of the visit.
+    refetchInterval: 30_000,
   });
 }
 
