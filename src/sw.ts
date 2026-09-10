@@ -22,8 +22,13 @@ precacheAndRoute(self.__WB_MANIFEST);
 
 // Navigation: NetworkFirst w/ short timeout → falls back to the precached
 // shell (index.html) when offline, which is what makes "offline load works" true.
+// Excludes /api/* — Better Auth's email-verification/reset links are GET
+// requests that 302 redirect, and a SW-intercepted `fetch()` for a
+// navigation request can't hand a followed-redirect Response back to
+// `respondWith()` (browsers reject it), so those must hit the network
+// directly instead of going through this route.
 registerRoute(
-  ({ request }) => request.mode === 'navigate',
+  ({ request, url }) => request.mode === 'navigate' && !url.pathname.startsWith('/api/'),
   new NetworkFirst({
     cacheName: 'navigations',
     networkTimeoutSeconds: 3,
