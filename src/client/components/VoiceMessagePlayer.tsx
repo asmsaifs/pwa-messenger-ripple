@@ -119,12 +119,15 @@ export function VoiceMessagePlayer({ attachmentId, own }: { attachmentId: string
       >
         {loading ? '…' : playing ? '⏸' : '▶'}
       </button>
-      <div className="relative flex h-8 flex-1 items-center gap-[2px]" data-testid="voice-stored-waveform">
+      <div
+        className="relative flex h-8 min-w-0 flex-1 items-center gap-[1px] overflow-hidden"
+        data-testid="voice-stored-waveform"
+      >
         {bars.map((level, i) => (
           <span
             key={i}
             style={{ height: `${Math.max(10, level)}%` }}
-            className={`w-[3px] rounded-full ${
+            className={`min-w-0 flex-1 rounded-full ${
               i / bars.length <= progress
                 ? own
                   ? 'bg-white'

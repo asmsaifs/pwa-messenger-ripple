@@ -434,7 +434,7 @@ export function ThreadPage() {
               >
                 <div
                   className={cn(
-                    'max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[75%]',
+                    'max-w-[85%] min-w-0 rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[75%]',
                     own ? 'bg-brand-500 text-white' : 'bg-surface text-ink',
                   )}
                 >
