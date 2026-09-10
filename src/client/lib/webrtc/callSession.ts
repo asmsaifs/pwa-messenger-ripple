@@ -115,6 +115,15 @@ function cleanup(): void {
   connectWatchdog = null;
   releaseWakeLock();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
+  // CallDO's `webSocketClose` deliberately no-ops (docs/01 §4.3: a dropped
+  // socket should get a reconnect window, not an instant end) — so a locally
+  // detected failure (ICE never connects, connect watchdog fires) must tell
+  // the server explicitly or the `calls` row is stuck 'ringing'/'active'
+  // forever, 409-blocking every future call between these two users. A
+  // server-initiated end (decline/missed/failed frame) already marked the
+  // row terminal before calling this, so this is a harmless no-op then
+  // (CallDO's `bye` handler is idempotent on a terminal call).
+  socket?.send({ t: 'bye', reason: 'client_failure' });
   socket?.close();
   socket = null;
   peerConnection?.close();
