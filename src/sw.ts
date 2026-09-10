@@ -10,6 +10,7 @@ import {
 import { ExpirationPlugin } from 'workbox-expiration';
 import { flushOutbox } from './client/lib/outbox';
 import { pushPayloadSchema } from './shared/push';
+import { notificationOptionsFor, callIdFromNotificationUrl } from './client/lib/push-notification-options';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -93,17 +94,7 @@ self.addEventListener('push', (event: PushEvent) => {
         const raw: unknown = event.data?.json();
         const payload = pushPayloadSchema.parse(raw);
         title = payload.title;
-        options = {
-          body: payload.body,
-          tag: payload.tag,
-          icon: '/icons/192.png',
-          badge: '/icons/192.png',
-          data: payload.data,
-          // Call pushes (M13/M14) need the user to actively accept/decline
-          // rather than the notification auto-dismissing — every other type
-          // behaves like a normal transient notification (docs/06 §3).
-          requireInteraction: payload.type === 'call',
-        };
+        options = notificationOptionsFor(payload);
       } catch (err) {
         console.error('[sw] malformed push payload', err);
       }
@@ -120,6 +111,23 @@ self.addEventListener('push', (event: PushEvent) => {
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
   const url = (event.notification.data as { url?: string } | undefined)?.url ?? '/';
+  // docs/04 §"Incoming (backgrounded)": Decline must work even with no
+  // client open at all, so it goes straight to the API from the SW rather
+  // than routing through a page — `tag` is `call-<callId>` (docs/03 §4),
+  // the same id embedded in `url` (`/call/<callId>`), so either works; `url`
+  // avoids a second string format to keep in sync.
+  if (event.action === 'decline') {
+    const callId = callIdFromNotificationUrl(url);
+    event.waitUntil(
+      callId
+        ? fetch(`/api/calls/${callId}/decline`, {
+            method: 'POST',
+            credentials: 'same-origin',
+          }).catch(() => undefined)
+        : Promise.resolve(),
+    );
+    return;
+  }
   event.waitUntil(
     (async () => {
       const clientsList = await self.clients.matchAll({

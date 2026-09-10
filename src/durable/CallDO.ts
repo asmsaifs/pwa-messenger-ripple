@@ -183,6 +183,19 @@ export class CallDO extends DurableObject<Env> {
       callId: this.state.callId,
       reason,
     });
+    // Self-notify the callee too (M14): a push-driven Decline action skips
+    // the client entirely (the SW hits this route directly, no
+    // `declineIncomingCall()` ever runs to set local state), so a tab that's
+    // still open and connected — the common "backgrounded but not
+    // suspended" case — would otherwise be stuck showing "Incoming call"
+    // forever. A harmless no-op when the client already declined itself
+    // in-app (its status is already past `incoming-ringing` by the time
+    // this fires).
+    await this.notifyUserDO(userId, {
+      t: 'call_cancelled',
+      callId: this.state.callId,
+      reason,
+    });
     await this.endCall('declined', reason);
   }
 

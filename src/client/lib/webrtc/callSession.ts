@@ -283,10 +283,14 @@ export function handleIncomingCall(input: { callId: string; conversationId: stri
   });
 }
 
-export function handleCallCancelledFromServer(callId: string): void {
+export function handleCallCancelledFromServer(callId: string, reason?: string): void {
   if (useCallStore.getState().callId !== callId) return;
   if (useCallStore.getState().status === 'incoming-ringing') {
-    endWithLabel('Missed call');
+    // `reason: 'user'` is this same client's own Decline having gone
+    // through the SW/push path instead of `declineIncomingCall()` (M14) —
+    // everything else (caller cancelled, ring-timeout alarm) really is a
+    // miss from this client's point of view.
+    endWithLabel(reason === 'user' ? 'Declined' : 'Missed call');
   }
 }
 

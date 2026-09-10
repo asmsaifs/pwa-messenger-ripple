@@ -43,6 +43,7 @@ export function CallMinimizedBar() {
     <button
       type="button"
       data-testid="call-minimized-bar"
+      data-call-id={callId}
       onClick={() => void navigate(`/call/${callId}`)}
       className="flex w-full items-center justify-center gap-2 bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
     >

@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useMe } from '../lib/queries/me';
 import { useUserSocket, type UserConnectionStatus } from '../lib/ws/userSocket';
+import { initRingtone } from '../lib/webrtc/ringtone';
 
 export type RequireAuthContext = { showReconnecting: boolean; userSocketStatus: UserConnectionStatus };
 
@@ -15,6 +17,10 @@ export function RequireAuth() {
   const location = useLocation();
   const me = useMe();
   const { status, showReconnecting } = useUserSocket(Boolean(me.data));
+
+  // docs/04 incoming-call ringtone (M14) — one subscription for the whole
+  // authenticated session, same lifetime rationale as the socket above.
+  useEffect(() => initRingtone(), []);
 
   if (me.isPending) {
     return (

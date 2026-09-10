@@ -102,7 +102,7 @@ export function useUserSocket(enabled: boolean) {
             handleIncomingCall({ callId: frame.callId, conversationId: frame.conversationId, from: frame.from });
             return;
           case 'call_cancelled':
-            handleCallCancelledFromServer(frame.callId);
+            handleCallCancelledFromServer(frame.callId, frame.reason);
             return;
           // `presence`/`pong`/`error` need no cache update.
           default:
