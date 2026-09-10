@@ -120,24 +120,34 @@ export function VoiceMessagePlayer({ attachmentId, own }: { attachmentId: string
         {loading ? '…' : playing ? '⏸' : '▶'}
       </button>
       <div
-        className="relative flex h-8 min-w-0 flex-1 items-center gap-[1px] overflow-hidden"
+        className="relative h-8 min-w-0 flex-1 overflow-hidden"
         data-testid="voice-stored-waveform"
       >
-        {bars.map((level, i) => (
-          <span
-            key={i}
-            style={{ height: `${Math.max(10, level)}%` }}
-            className={`min-w-0 flex-1 rounded-full ${
-              i / bars.length <= progress
-                ? own
-                  ? 'bg-white'
-                  : 'bg-blue-600'
-                : own
-                  ? 'bg-white/40'
-                  : 'bg-slate-300'
-            }`}
-          />
-        ))}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full" aria-hidden="true">
+          {bars.map((level, i) => {
+            const barWidth = 100 / bars.length;
+            const height = Math.max(10, level);
+            const played = i / bars.length <= progress;
+            const fill = played
+              ? own
+                ? '#fff'
+                : '#2563eb'
+              : own
+                ? 'rgba(255,255,255,0.4)'
+                : '#cbd5e1';
+            return (
+              <rect
+                key={i}
+                x={i * barWidth + barWidth * 0.15}
+                y={(100 - height) / 2}
+                width={barWidth * 0.7}
+                height={height}
+                rx={barWidth * 0.35}
+                fill={fill}
+              />
+            );
+          })}
+        </svg>
         <input
           type="range"
           min={0}
