@@ -39,15 +39,8 @@ export function AppLayout() {
           Reconnecting…
         </div>
       )}
-      <header
-        className="titlebar-drag flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-700"
-        style={{
-          height: 'env(titlebar-area-height, 3.5rem)',
-          marginInlineStart: 'env(titlebar-area-x, 0px)',
-          width: 'env(titlebar-area-width, 100%)',
-        }}
-      >
-        <div className="titlebar-no-drag flex items-center gap-6">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-700">
+        <div className="flex items-center gap-6">
           <span className="text-sm font-semibold">Ripple</span>
           <nav aria-label="Primary" className="flex gap-4 text-sm">
             {NAV_LINKS.map((link) => (
@@ -74,7 +67,7 @@ export function AppLayout() {
             ))}
           </nav>
         </div>
-        <div className="titlebar-no-drag flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <InstallButton variant="ghost" />
           {me.data && <span className="text-sm text-slate-500 dark:text-slate-400">{me.data.profile.displayName}</span>}
         </div>
