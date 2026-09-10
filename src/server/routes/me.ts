@@ -1,12 +1,21 @@
 import { Hono } from 'hono';
-import { notFound } from '../errors';
+import { AppError, notFound } from '../errors';
 import { createAuth } from '../lib/auth';
 import { requireAuth } from '../middleware/actor';
 import { userStub } from '../lib/user-do';
+import { ALLOWED_MIME_TYPES, sniffMimeType } from '../lib/magic-bytes';
+import { presignPutUrl } from '../lib/r2-presign';
 import * as policy from '../policy';
 import * as profilesRepo from '../repos/profiles';
 import { takeRateLimit } from '../lib/rate-limit';
-import { meResponseSchema, updateMeSchema } from '../../shared/me';
+import { uuidv7 } from '../../shared/id';
+import {
+  completeAvatarInputSchema,
+  meResponseSchema,
+  signAvatarInputSchema,
+  signAvatarResponseSchema,
+  updateMeSchema,
+} from '../../shared/me';
 import { sessionsResponseSchema } from '../../shared/account';
 import type { Env } from '../env';
 import type { AuthUser } from '../middleware/actor';
@@ -65,6 +74,83 @@ meRoute.patch('/', async (c) => {
       ? await profilesRepo.updateProfile(c.env, actor, patch)
       : await profilesRepo.getProfile(c.env, actor, actor.userId);
   if (!profile) throw new Error('profile missing for authenticated user');
+
+  const body = meResponseSchema.shape.profile.parse({
+    userId: profile.userId,
+    displayName: profile.displayName,
+    avatarKey: profile.avatarKey,
+    statusText: profile.statusText,
+  });
+  return c.json(body);
+});
+
+// Extension is cosmetic only, same rationale as attachments.ts's map — image
+// types only here (an avatar is never a pdf/zip/etc).
+const AVATAR_EXT_BY_CONTENT_TYPE: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+
+const AVATAR_UPLOAD_HOURLY_LIMIT = 10;
+
+meRoute.post('/avatar/sign', async (c) => {
+  const actor = c.get('actor');
+  policy.assertProfileUpdatable(actor, actor.userId);
+  await takeRateLimit(
+    c.env,
+    actor.userId,
+    'avatar-upload',
+    AVATAR_UPLOAD_HOURLY_LIMIT,
+    60 * 60 * 1000,
+  );
+
+  const input = signAvatarInputSchema.parse(await c.req.json());
+  const contentType = (input.contentType.split(';')[0] ?? input.contentType).trim();
+  const ext = AVATAR_EXT_BY_CONTENT_TYPE[contentType];
+  if (!ext) throw new AppError('upload/unsupported-type');
+
+  const key = `avatars/${actor.userId}/${uuidv7()}.${ext}`;
+  const { url, expiresAt } = await presignPutUrl(c.env, key, input.size);
+  return c.json(signAvatarResponseSchema.parse({ uploadUrl: url, key, expiresAt }));
+});
+
+meRoute.post('/avatar/complete', async (c) => {
+  const actor = c.get('actor');
+  policy.assertProfileUpdatable(actor, actor.userId);
+
+  const { key } = completeAvatarInputSchema.parse(await c.req.json());
+  // The key a client claims to have uploaded must actually be one this actor
+  // was signed for — never trust it blindly (CLAUDE.md hard rule 3: repos/
+  // routes re-check authorization themselves, not just the identity of the
+  // caller from `/sign`).
+  if (!key.startsWith(`avatars/${actor.userId}/`)) throw new AppError('policy/forbidden');
+
+  async function fail(): Promise<never> {
+    await c.env.MEDIA.delete(key);
+    throw new AppError('upload/mismatch');
+  }
+
+  const object = await c.env.MEDIA.head(key);
+  if (!object) return fail();
+
+  const range = await c.env.MEDIA.get(key, { range: { offset: 0, length: 4096 } });
+  if (!range) return fail();
+  const head = new Uint8Array(await range.arrayBuffer());
+  const sniffed = sniffMimeType(head);
+  if (!sniffed || !sniffed.startsWith('image/') || !ALLOWED_MIME_TYPES.has(sniffed)) return fail();
+
+  const previous = await profilesRepo.getProfile(c.env, actor, actor.userId);
+  const profile = await profilesRepo.updateProfile(c.env, actor, { avatarKey: key });
+  if (!profile) throw new Error('profile missing for authenticated user');
+
+  // Old avatar object is now unreferenced — clean it up so storage doesn't
+  // grow unbounded across repeated re-uploads (mirrors attachments' orphan
+  // sweep, just done inline here since there's at most one old key to drop).
+  if (previous?.avatarKey && previous.avatarKey !== key) {
+    await c.env.MEDIA.delete(previous.avatarKey);
+  }
 
   const body = meResponseSchema.shape.profile.parse({
     userId: profile.userId,

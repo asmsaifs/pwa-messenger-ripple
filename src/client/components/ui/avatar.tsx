@@ -15,6 +15,10 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: keyof typeof sizeClasses;
   presence?: Presence;
   speaking?: boolean;
+  /** `profile.avatarKey` (already shaped `avatars/:userId/:filename`, so it
+   * addresses src/server/routes/avatars.ts directly as `/${avatarKey}`).
+   * Falls back to initials when null/absent or the image fails to load. */
+  avatarKey?: string | null;
 }
 
 const brandTints = [
@@ -35,19 +39,30 @@ function tintFor(name: string) {
 // Shared initials avatar used by conversation lists, friends, call stage, and
 // the header — presence dot and a soft "speaking" ring are opt-in per usage.
 export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
-  ({ name, size = 'md', presence, speaking, className, ...props }, ref) => {
+  ({ name, size = 'md', presence, speaking, avatarKey, className, ...props }, ref) => {
     const initial = name.trim().slice(0, 1).toUpperCase() || '?';
+    const [imgFailed, setImgFailed] = React.useState(false);
+    const showImage = !!avatarKey && !imgFailed;
     return (
       <div ref={ref} className={cn('relative inline-flex shrink-0', className)} {...props}>
         <div
           className={cn(
-            'flex items-center justify-center rounded-full font-medium',
+            'flex items-center justify-center overflow-hidden rounded-full font-medium',
             sizeClasses[size],
-            tintFor(name),
+            !showImage && tintFor(name),
             speaking && 'ring-2 ring-brand-500 ring-offset-2 ring-offset-surface',
           )}
         >
-          {initial}
+          {showImage ? (
+            <img
+              src={`/${avatarKey}`}
+              alt=""
+              className="size-full object-cover"
+              onError={() => setImgFailed(true)}
+            />
+          ) : (
+            initial
+          )}
         </div>
         {presence && (
           <span

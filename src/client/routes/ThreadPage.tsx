@@ -286,10 +286,10 @@ export function ThreadPage() {
       {/* Not user-facing chrome — a hook for e2e specs to wait on the socket
           actually being open before driving frames through it. */}
       <span hidden data-testid="ws-status" data-status={status} />
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle bg-surface px-4">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border-subtle bg-surface px-3 sm:gap-3 sm:px-4">
         <Link
           to="/chats"
-          className="text-sm text-ink-muted hover:text-ink lg:hidden"
+          className="shrink-0 text-sm text-ink-muted hover:text-ink lg:hidden"
         >
           ← Back
         </Link>
@@ -299,7 +299,13 @@ export function ThreadPage() {
         )}
         {data && (
           <>
-            <Avatar name={data.peer.displayName} presence="online" size="sm" className="hidden sm:inline-flex" />
+            <Avatar
+              name={data.peer.displayName}
+              avatarKey={data.peer.avatarKey}
+              presence="online"
+              size="sm"
+              className="hidden sm:inline-flex"
+            />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-ink">{data.peer.displayName}</div>
               <div className="truncate text-xs text-ink-muted" data-testid="peer-status">
@@ -341,7 +347,7 @@ export function ThreadPage() {
         </div>
       )}
 
-      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto bg-surface-sunken px-4">
+      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto bg-surface-sunken px-3 sm:px-4">
         {status === 'connecting' && messages.length === 0 && (
           <div className="flex h-full items-center justify-center text-sm text-ink-muted">
             Connecting…
@@ -428,7 +434,7 @@ export function ThreadPage() {
               >
                 <div
                   className={cn(
-                    'max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm',
+                    'max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[75%]',
                     own ? 'bg-brand-500 text-white' : 'bg-surface text-ink',
                   )}
                 >
@@ -475,7 +481,7 @@ export function ThreadPage() {
           onClose={() => setVoiceOpen(false)}
         />
       ) : (
-      <div className="flex items-end gap-2 border-t border-border-subtle bg-surface p-3">
+      <div className="flex items-end gap-1 border-t border-border-subtle bg-surface p-2 sm:gap-2 sm:p-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -492,7 +498,7 @@ export function ThreadPage() {
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           data-testid="attach-button"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40 sm:size-9"
           aria-label="Attach file"
         >
           {uploading ? '…' : '＋'}
@@ -515,7 +521,7 @@ export function ThreadPage() {
           onClick={() => setCameraOpen(true)}
           disabled={uploading}
           data-testid="camera-button"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40 sm:size-9"
           aria-label="Take photo"
         >
           📷
@@ -525,7 +531,7 @@ export function ThreadPage() {
           onClick={() => setVoiceOpen(true)}
           disabled={uploading}
           data-testid="voice-button"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40 sm:size-9"
           aria-label="Record voice message"
         >
           🎤
@@ -545,14 +551,14 @@ export function ThreadPage() {
           rows={1}
           placeholder="Message"
           data-testid="composer-input"
-          className="min-h-9 flex-1 resize-none rounded-xl border border-slate-300 bg-surface px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700"
+          className="min-h-9 min-w-0 flex-1 resize-none rounded-xl border border-slate-300 bg-surface px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700"
         />
         <button
           type="button"
           onClick={handleSend}
           disabled={!draft.trim()}
           data-testid="composer-send"
-          className="rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+          className="shrink-0 rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
         >
           Send
         </button>

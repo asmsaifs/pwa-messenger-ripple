@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { InstallButton } from '../components/InstallButton';
 import { CallMinimizedBar } from '../components/CallMinimizedBar';
-import { Logo, LogoMark } from '../components/Logo';
+import { Logo } from '../components/Logo';
 import { Avatar } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { useMe } from '../lib/queries/me';
@@ -65,7 +65,7 @@ export function AppLayout() {
           <InstallButton variant="ghost" className="justify-start" />
           {me.data && (
             <div className="flex items-center gap-2.5 px-1 py-1">
-              <Avatar name={me.data.profile.displayName} size="sm" />
+              <Avatar name={me.data.profile.displayName} avatarKey={me.data.profile.avatarKey} size="sm" />
               <span className="truncate text-sm text-ink-muted">{me.data.profile.displayName}</span>
             </div>
           )}
@@ -85,10 +85,10 @@ export function AppLayout() {
 
         {/* Mobile top bar */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-subtle bg-surface px-4 lg:hidden">
-          <LogoMark className="size-6" />
+          <Logo />
           <div className="flex items-center gap-2">
             <InstallButton variant="ghost" size="sm" />
-            {me.data && <Avatar name={me.data.profile.displayName} size="sm" />}
+            {me.data && <Avatar name={me.data.profile.displayName} avatarKey={me.data.profile.avatarKey} size="sm" />}
           </div>
         </header>
 

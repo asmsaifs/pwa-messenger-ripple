@@ -78,7 +78,7 @@ function FriendRow({ friend }: { friend: FriendSummary }) {
   return (
     <li className="flex items-center justify-between gap-3 border-b border-border-subtle py-3 last:border-0">
       <div className="flex min-w-0 items-center gap-3">
-        <Avatar name={friend.displayName} size="sm" />
+        <Avatar name={friend.displayName} avatarKey={friend.avatarKey} size="sm" />
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-ink">{friend.displayName}</p>
           {friend.statusText && <p className="truncate text-xs text-ink-muted">{friend.statusText}</p>}
@@ -102,7 +102,7 @@ function RequestRow({ request, direction }: { request: FriendRequestSummary; dir
   return (
     <li className="flex items-center justify-between gap-3 border-b border-border-subtle py-3 last:border-0">
       <div className="flex min-w-0 items-center gap-3">
-        <Avatar name={request.displayName} size="sm" />
+        <Avatar name={request.displayName} avatarKey={request.avatarKey} size="sm" />
         <p className="truncate text-sm font-medium text-ink">{request.displayName}</p>
       </div>
       {direction === 'incoming' ? (

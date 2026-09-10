@@ -29,3 +29,24 @@ export const updateMeSchema = z.object({
 });
 
 export type UpdateMeInput = z.infer<typeof updateMeSchema>;
+
+// POST /api/me/avatar/sign, /complete (docs/04 §"Settings": profile photo).
+// Same sign → PUT → complete flow as attachments (docs/01 §4.2) but scoped to
+// the caller's own profile row instead of a conversation.
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+
+export const signAvatarInputSchema = z.object({
+  contentType: z.string().min(1),
+  size: z.number().int().positive().max(MAX_AVATAR_BYTES),
+});
+export type SignAvatarInput = z.infer<typeof signAvatarInputSchema>;
+
+export const signAvatarResponseSchema = z.object({
+  uploadUrl: z.string(),
+  key: z.string(),
+  expiresAt: z.number().int(),
+});
+export type SignAvatarResponse = z.infer<typeof signAvatarResponseSchema>;
+
+export const completeAvatarInputSchema = z.object({ key: z.string().min(1) });
+export type CompleteAvatarInput = z.infer<typeof completeAvatarInputSchema>;

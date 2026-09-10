@@ -88,7 +88,11 @@ function ConversationListPane() {
                   )
                 }
               >
-                <Avatar name={conversation.peerDisplayName} presence={conversation.peerPresence} />
+                <Avatar
+                  name={conversation.peerDisplayName}
+                  avatarKey={conversation.peerAvatarKey}
+                  presence={conversation.peerPresence}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate text-sm font-medium text-ink">

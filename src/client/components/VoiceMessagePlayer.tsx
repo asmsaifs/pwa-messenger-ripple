@@ -114,7 +114,7 @@ export function VoiceMessagePlayer({ attachmentId, own }: { attachmentId: string
         aria-label={playing ? 'Pause voice message' : 'Play voice message'}
         data-testid="voice-play-toggle"
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs disabled:opacity-50 ${
-          own ? 'bg-white/20 text-white' : 'bg-black/10 text-slate-900'
+          own ? 'bg-white/20 text-white' : 'bg-ink/10 text-ink'
         }`}
       >
         {loading ? '…' : playing ? '⏸' : '▶'}

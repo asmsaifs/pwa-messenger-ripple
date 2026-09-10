@@ -10,6 +10,7 @@ import { csp } from './middleware/csp';
 import { csrfProtection } from './middleware/csrf';
 import { accountRoute } from './routes/account';
 import { attachmentsRoute } from './routes/attachments';
+import { avatarsRoute } from './routes/avatars';
 import { callsRoute, turnRoute } from './routes/calls';
 import { conversationsRoute } from './routes/conversations';
 import { friendsRoute } from './routes/friends';
@@ -72,6 +73,7 @@ app.route('/api/calls', callsRoute);
 app.route('/api/turn', turnRoute);
 app.route('/api/ws', wsRoute);
 app.route('/api/account', accountRoute);
+app.route('/avatars', avatarsRoute);
 
 // Fallback for anything not handled above: hand off to Workers Static Assets,
 // which serves index.html for unmatched paths (SPA client-side routing) per
