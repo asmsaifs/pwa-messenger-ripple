@@ -9,12 +9,12 @@ import {
 } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { flushOutbox } from './client/lib/outbox';
+import { pushPayloadSchema } from './shared/push';
 
 declare let self: ServiceWorkerGlobalScope;
 
 // M4 scope (docs/06 §2): precache the app shell + the caching rules below.
-// Push/notificationclick land in M12, badge refresh in M7 — this file grows
-// those handlers when those milestones build the data they need.
+// Push/notificationclick/pushsubscriptionchange land here in M12.
 
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
@@ -71,4 +71,133 @@ self.addEventListener('sync', (event) => {
   if (event.tag === 'outbox-flush') {
     event.waitUntil(flushOutbox());
   }
+});
+
+// docs/03 §4 / docs/06 §3: the push service delivers the `aes128gcm`-decrypted
+// JSON payload as `event.data` — the browser handles the RFC 8291 decryption
+// itself before this handler ever runs, so this only has to parse and render
+// it. A push with no listener that shows no notification gets Chrome's
+// generic "this site has been updated" fallback and, repeated enough times,
+// the browser can revoke the permission — so every code path here calls
+// `showNotification`, even the malformed-payload fallback.
+self.addEventListener('push', (event: PushEvent) => {
+  event.waitUntil(
+    (async () => {
+      let title = 'Ripple';
+      let options: NotificationOptions & { data?: unknown } = {
+        body: 'You have a new notification.',
+        icon: '/icons/192.png',
+        badge: '/icons/192.png',
+      };
+      try {
+        const raw: unknown = event.data?.json();
+        const payload = pushPayloadSchema.parse(raw);
+        title = payload.title;
+        options = {
+          body: payload.body,
+          tag: payload.tag,
+          icon: '/icons/192.png',
+          badge: '/icons/192.png',
+          data: payload.data,
+          // Call pushes (M13/M14) need the user to actively accept/decline
+          // rather than the notification auto-dismissing — every other type
+          // behaves like a normal transient notification (docs/06 §3).
+          requireInteraction: payload.type === 'call',
+        };
+      } catch (err) {
+        console.error('[sw] malformed push payload', err);
+      }
+      await self.registration.showNotification(title, options);
+    })(),
+  );
+});
+
+// docs/06 §3/§4: focus the existing client (never spawn a second window —
+// `launch_handler: navigate-existing` in the manifest is the install-time
+// half of that same rule) and hand it the target URL via `postMessage`
+// rather than navigating the SW-controlled window directly, since a
+// `WindowClient.navigate()` call would race the app's own router.
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  event.notification.close();
+  const url = (event.notification.data as { url?: string } | undefined)?.url ?? '/';
+  event.waitUntil(
+    (async () => {
+      const clientsList = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+      const existing = clientsList[0];
+      if (existing) {
+        await existing.focus();
+        existing.postMessage({ type: 'NAV', url });
+        return;
+      }
+      await self.clients.openWindow(url);
+    })(),
+  );
+});
+
+// A `call_cancelled` push (M14) needs to close the ringing notification it
+// previously opened — server-side "push-cancel" (docs/01 §4.3) is really
+// just another push whose payload's `tag` matches the original, so
+// `showNotification` with the same `tag` already replaces it; this handler
+// exists for the one case that isn't a replace — the callee's client is
+// open and handles it over the WS `call_cancelled` frame instead, so the SW
+// only needs to close a notification tag it's not going to get a replacement
+// push for. Not exercised until M14 introduces that payload type, but wiring
+// it now keeps the push handler above the single source of truth for what
+// `tag` means.
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const data = event.data as { type?: string; tag?: string } | undefined;
+  if (data?.type === 'CLOSE_NOTIFICATION' && data.tag) {
+    const tag = data.tag;
+    event.waitUntil(
+      self.registration.getNotifications({ tag }).then((notifications) => {
+        for (const n of notifications) n.close();
+      }),
+    );
+  }
+});
+
+// docs/06 §3: the browser rotates a push subscription (key expiry, browser-
+// side maintenance) without any app code running — this event is the only
+// place that can react. Reuses the *same* `applicationServerKey` the old
+// subscription was created with (carried on `event.oldSubscription`) rather
+// than needing the VAPID public key threaded into the SW's own scope, then
+// swaps the server's copy: subscribe-new-then-delete-old, not the reverse,
+// so a crash/reload between the two steps leaves the server with a working
+// subscription rather than none.
+self.addEventListener('pushsubscriptionchange', (event: Event) => {
+  const pushEvent = event as Event & {
+    oldSubscription?: PushSubscription;
+    newSubscription?: PushSubscription;
+    waitUntil(promise: Promise<unknown>): void;
+  };
+  pushEvent.waitUntil(
+    (async () => {
+      const applicationServerKey = pushEvent.oldSubscription?.options.applicationServerKey;
+      const newSubscription =
+        pushEvent.newSubscription ??
+        (await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        }));
+      const json = newSubscription.toJSON();
+      if (!json.endpoint || !json.keys) return;
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      });
+      if (pushEvent.oldSubscription && pushEvent.oldSubscription.endpoint !== json.endpoint) {
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ endpoint: pushEvent.oldSubscription.endpoint }),
+        }).catch(() => undefined);
+      }
+    })(),
+  );
 });

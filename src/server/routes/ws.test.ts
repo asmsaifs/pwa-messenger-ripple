@@ -1,4 +1,4 @@
-import { SELF } from 'cloudflare:test';
+import { SELF, env } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const BASE = 'https://example.com';
@@ -249,5 +249,95 @@ describe('ws routes (UserDO personal socket, docs/09 M7)', () => {
     const frame = await nextFrame(aSocket);
     expect(frame).toMatchObject({ t: 'friend_accepted', conversationId });
     aSocket.close();
+  });
+});
+
+// docs/03 §2.1/§4, docs/09 M12: "enqueues push-queue for members with no
+// live socket". Spies directly on the `PUSH_QUEUE` binding rather than
+// draining the queue end-to-end — the consumer side (src/server/push/
+// consumer.ts) already has its own coverage in
+// src/server/push/consumer.test.ts, so this only needs to prove the
+// producer's "is this member actually offline" branch is correct.
+describe('push-queue fan-out (docs/09 M12)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function connectUser(cookie: string): Promise<WebSocket> {
+    const res = await SELF.fetch(`${BASE}/api/ws/user`, {
+      headers: { Cookie: cookie, Upgrade: 'websocket', Origin: ORIGIN },
+    });
+    const ws = res.webSocket;
+    if (!ws) throw new Error(`expected a WebSocket upgrade, got status ${res.status}`);
+    ws.accept();
+    return ws;
+  }
+
+  it('a message to an offline recipient enqueues a push job', async () => {
+    const { conversationId, a, b } = await makeConversation('push-msg-offline');
+    const bMeRes = await SELF.fetch(`${BASE}/api/me`, { headers: { Cookie: b } });
+    const bMe = await bMeRes.json<{ user: { id: string } }>();
+    const sendSpy = vi.spyOn(env.PUSH_QUEUE, 'send');
+
+    const res = await post(`/api/conversations/${conversationId}/messages`, a, {
+      clientId: 'push-msg-1',
+      kind: 'text',
+      body: 'are you there?',
+    });
+    expect(res.status).toBe(200);
+
+    expect(sendSpy).toHaveBeenCalledOnce();
+    const job = sendSpy.mock.calls[0]![0] as {
+      userId: string;
+      payload: { type: string; tag: string; data: { url: string } };
+    };
+    expect(job.userId).toBe(bMe.user.id);
+    expect(job.payload.type).toBe('message');
+    expect(job.payload.tag).toBe(`msg-${conversationId}`);
+    expect(job.payload.data.url).toBe(`/c/${conversationId}`);
+  });
+
+  it('a message to a recipient with a live UserDO socket does not enqueue a push job', async () => {
+    const { conversationId, a, b } = await makeConversation('push-msg-online');
+    const bSocket = await connectUser(b);
+    const sendSpy = vi.spyOn(env.PUSH_QUEUE, 'send');
+
+    const res = await post(`/api/conversations/${conversationId}/messages`, a, {
+      clientId: 'push-msg-online-1',
+      kind: 'text',
+      body: 'hi',
+    });
+    expect(res.status).toBe(200);
+    await nextFrame(bSocket); // the unread bump — proves the fan-out ran before asserting push didn't
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    bSocket.close();
+  });
+
+  it('a friend request to an offline recipient enqueues a push job', async () => {
+    const a = await signUpAndVerify('push-fr-a@example.com', 'A');
+    await signUpAndVerify('push-fr-b@example.com', 'B');
+    const sendSpy = vi.spyOn(env.PUSH_QUEUE, 'send');
+
+    const res = await post('/api/friends/invite', a, { email: 'push-fr-b@example.com' });
+    expect(res.status).toBe(200);
+
+    expect(sendSpy).toHaveBeenCalledOnce();
+    const job = sendSpy.mock.calls[0]![0] as { payload: { type: string; tag: string } };
+    expect(job.payload.type).toBe('friend_request');
+  });
+
+  it('a friend request to a recipient with a live socket does not enqueue a push job', async () => {
+    const a = await signUpAndVerify('push-fr-online-a@example.com', 'A');
+    const b = await signUpAndVerify('push-fr-online-b@example.com', 'B');
+    const bSocket = await connectUser(b);
+    const sendSpy = vi.spyOn(env.PUSH_QUEUE, 'send');
+
+    const res = await post('/api/friends/invite', a, { email: 'push-fr-online-b@example.com' });
+    expect(res.status).toBe(200);
+    await nextFrame(bSocket); // the friend_request frame
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    bSocket.close();
   });
 });

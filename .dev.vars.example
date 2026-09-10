@@ -15,3 +15,15 @@ BETTER_AUTH_SECRET=dev-only-change-me
 # exercise a real upload against the local Miniflare bucket.
 R2_ACCESS_KEY_ID=dev-only-change-me
 R2_SECRET_ACCESS_KEY=dev-only-change-me
+
+# M12 — Web Push VAPID keypair (docs/05 §8/§10, docs/08 §3). Unlike the other
+# placeholders above, this pair MUST be a real P-256 keypair in the exact
+# format src/server/lib/vapid.ts expects (raw uncompressed point / raw `d`,
+# both base64url) — it's fed straight into WebCrypto, which errors on
+# anything else. Generate a fresh one with `node scripts/generate-vapid-keys.mjs`
+# (or `npx web-push generate-vapid-keys`, same format) and set the matching
+# public half as `VITE_VAPID_PUBLIC_KEY` in `.env.local` (see that file's
+# example). Never commit a real keypair; rotating it invalidates every
+# existing subscription (2-key rollover if forced in production).
+VAPID_PUBLIC_KEY=dev-only-run-scripts/generate-vapid-keys.mjs
+VAPID_PRIVATE_KEY=dev-only-run-scripts/generate-vapid-keys.mjs

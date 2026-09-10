@@ -5,6 +5,7 @@ import * as friendsRepo from '../repos/friends';
 import * as profilesRepo from '../repos/profiles';
 import * as usersRepo from '../repos/users';
 import { sendInviteEmail } from '../lib/mail';
+import { enqueuePush } from '../lib/push-queue';
 import { takeRateLimit } from '../lib/rate-limit';
 import { generateInviteToken, hashInviteToken } from '../lib/tokens';
 import { userStub } from '../lib/user-do';
@@ -38,6 +39,36 @@ async function publicProfileFor(env: Env, actor: Actor, userId: string): Promise
     avatarKey: profile.avatarKey,
     statusText: profile.statusText,
   };
+}
+
+// Fan-in to UserDO's personal socket (docs/03 §2.2), and — new in M12 — a
+// `push-queue` job for whichever recipients have no live socket at all
+// (docs/01 §4.4 "create friendships row pending + push", docs/03 §4:
+// "Producer: ... friend routes"). Mirrors ConversationDO.notifyOtherMembers'
+// "one hasLiveSocket check decides both" shape: a member with a live socket
+// already got the `notify` frame, so a push would be redundant.
+async function notifyAndMaybePush(
+  env: Env,
+  userId: string,
+  event: Parameters<ReturnType<typeof userStub>['notify']>[0],
+  push: { title: string; body: string; tag: string; url: string },
+): Promise<void> {
+  const stub = userStub(env, userId);
+  await stub.notify(event);
+  const hasLiveSocket = await stub.hasLiveSocket().catch(() => true); // fail closed: don't push on an RPC error
+  if (hasLiveSocket) return;
+  await enqueuePush(
+    env,
+    userId,
+    {
+      type: event.t === 'friend_accepted' ? 'friend_accepted' : 'friend_request',
+      title: push.title,
+      body: push.body,
+      tag: push.tag,
+      data: { url: push.url },
+    },
+    { urgency: 'normal', ttl: 60 * 60 * 24 },
+  ).catch((err) => console.error('push enqueue failed', err));
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -133,8 +164,16 @@ friendsRoute.post('/invite', async (c) => {
         // `friendship.status` is drizzle's plain `text()` column type — the
         // zod parse both validates it against the real enum and narrows it
         // for the RPC call's TS type, the same value it already is at runtime.
-        await userStub(c.env, targetUser.id).notify(
+        await notifyAndMaybePush(
+          c.env,
+          targetUser.id,
           userEventSchema.parse({ t: 'friend_request', friendship, from }),
+          {
+            title: from.displayName,
+            body: 'sent you a friend request',
+            tag: `friend-${friendship.id}`,
+            url: '/friends',
+          },
         );
       }
     }
@@ -175,11 +214,17 @@ friendsRoute.post('/:id/accept', async (c) => {
 
   const peer = await publicProfileFor(c.env, actor, actor.userId);
   if (peer) {
-    await userStub(c.env, friendship.requestedBy).notify({
-      t: 'friend_accepted',
-      conversationId: conversation.id,
-      peer,
-    });
+    await notifyAndMaybePush(
+      c.env,
+      friendship.requestedBy,
+      { t: 'friend_accepted', conversationId: conversation.id, peer },
+      {
+        title: peer.displayName,
+        body: 'accepted your friend request',
+        tag: `friend-${friendship.id}`,
+        url: `/c/${conversation.id}`,
+      },
+    );
   }
 
   return c.json(acceptFriendshipResponseSchema.parse({ conversationId: conversation.id }));

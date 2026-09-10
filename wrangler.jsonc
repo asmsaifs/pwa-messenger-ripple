@@ -73,6 +73,27 @@
   // to exercise an actual browser upload locally).
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "ripple-media-local" }],
 
+  // `push-queue` (M12, docs/03 §4, docs/08 §2). Producer: ConversationDO +
+  // friend routes (fan-out to offline members). Consumer:
+  // src/server/push/consumer.ts, wired in src/server/index.ts's `queue()`
+  // export. `push-dlq` needs no separate consumer binding — a queue only
+  // needs one when a Worker actively drains it, and nothing here does; it
+  // exists purely as the `dead_letter_queue` landing spot for messages that
+  // exhausted `max_retries`, inspectable via `wrangler queues consumer` /
+  // the dashboard.
+  "queues": {
+    "producers": [{ "binding": "PUSH_QUEUE", "queue": "push-queue" }],
+    "consumers": [
+      {
+        "queue": "push-queue",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "push-dlq",
+      },
+    ],
+  },
+
   // Orphan sweep (docs/03 §5): delete R2 object + row for attachments stuck
   // `pending` >24h (abandoned uploads — the client never called `/complete`).
   // Other cron jobs in docs/03 §5 belong to later milestones.

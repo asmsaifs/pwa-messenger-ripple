@@ -2,9 +2,11 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { signOut } from '../lib/auth-client';
 import { useMe, useInvalidateMe } from '../lib/queries/me';
+import { NotificationsSection } from '../components/NotificationsSection';
 
 // Full settings (devices, storage, privacy, data export/delete) land in M15
-// (docs/09) — this is the profile summary + sign-out that's useful now.
+// (docs/09) — this is the profile summary + sign-out that's useful now, plus
+// M12's notification permission toggle.
 export function SettingsPage() {
   const me = useMe();
   const invalidateMe = useInvalidateMe();
@@ -30,6 +32,8 @@ export function SettingsPage() {
           </div>
         </dl>
       )}
+
+      <NotificationsSection />
 
       <Button
         className="mt-6"

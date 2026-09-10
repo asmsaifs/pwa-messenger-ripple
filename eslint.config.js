@@ -86,13 +86,18 @@ export default tseslint.config(
     },
   },
 
-  // Config / tooling files run under Node, not typechecked against the app tsconfigs
+  // Config / tooling files run under Node, not typechecked against the app tsconfigs.
+  // `disableTypeChecked` carries its own `languageOptions` key, so it must be
+  // spread *before* this block's own `languageOptions` — spreading it after
+  // (the original ordering here) silently discarded the `globals.node`
+  // below, since object spread replaces a whole key rather than merging it.
   {
-    files: ['*.config.{ts,js}', 'eslint.config.js'],
+    files: ['*.config.{ts,js}', 'eslint.config.js', 'scripts/**/*.{js,mjs}'],
+    ...tseslint.configs.disableTypeChecked,
     languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
       globals: globals.node,
     },
-    ...tseslint.configs.disableTypeChecked,
   },
 
   {

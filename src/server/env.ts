@@ -40,4 +40,20 @@ export interface Env {
   R2_ACCOUNT_ID: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
+  // Web Push VAPID keypair (M12, docs/05 §8/§10, docs/08 §3) — signs the
+  // `Authorization: vapid ...` JWT (src/server/lib/vapid.ts). Never rotate
+  // without a 2-key rollover (docs/05 §10): every existing subscription
+  // would otherwise start 403ing. `VAPID_PUBLIC_KEY` is not secret by nature
+  // (docs/05 §5: "the client bundle holds only the VAPID *public* key") but
+  // both live as `wrangler secret put` values (docs/08 §3) since the client
+  // gets its copy via the build-time `VITE_VAPID_PUBLIC_KEY` var instead —
+  // this one is only what the Worker signs with server-side.
+  VAPID_PUBLIC_KEY: string;
+  VAPID_PRIVATE_KEY: string;
+  // `push-queue` producer binding (M12, docs/03 §4) — ConversationDO/friend
+  // routes enqueue here; `queue()` in index.ts consumes it via
+  // src/server/push/consumer.ts. `PushJob` is `unknown` at the binding level
+  // (Cloudflare's `Queue<Body>` generic just types `.send`'s argument) — the
+  // consumer validates the real shape with `pushJobSchema` on the way out.
+  PUSH_QUEUE: Queue<unknown>;
 }

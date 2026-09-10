@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { InstallButton } from '../components/InstallButton';
 import { useMe } from '../lib/queries/me';
+import { usePushNotificationNav } from '../lib/usePushNotificationNav';
 import { useUserSocket } from '../lib/ws/userSocket';
 
 const NAV_LINKS = [
@@ -19,6 +20,7 @@ export function AppLayout() {
   // UserDO's personal socket (docs/09 M7) — mounted once for the whole
   // authenticated session, not per-thread like useConversationSocket.
   const { showReconnecting } = useUserSocket(Boolean(me.data));
+  usePushNotificationNav();
   const unreadTotal = me.data?.unreadTotal ?? 0;
 
   return (

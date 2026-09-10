@@ -1,8 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import { AppError } from '../server/errors';
+import { enqueuePush } from '../server/lib/push-queue';
 import { takeRateLimit } from '../server/lib/rate-limit';
 import { userStub } from '../server/lib/user-do';
 import * as conversationsRepo from '../server/repos/conversations';
+import * as profilesRepo from '../server/repos/profiles';
 import {
   clientFrameSchema,
   previewTextFor,
@@ -452,7 +454,7 @@ export class ConversationDO extends DurableObject<Env> {
 
     const message = rowToMessage(row);
     this.broadcast({ t: 'message', message });
-    await this.notifyUnread(this.conversationId, input.senderId);
+    await this.notifyOtherMembers(this.conversationId, message, input.senderId);
     await this.ctx.storage.setAlarm(Date.now() + PREVIEW_FLUSH_DEBOUNCE_MS);
     return message;
   }
@@ -460,21 +462,50 @@ export class ConversationDO extends DurableObject<Env> {
   // Fan-in to UserDO (docs/01 §5's "reach a user without knowing their
   // sockets" path) so a member's other open tabs/devices see the badge move
   // even when they have no socket open on *this* conversation (docs/09 M7
-  // exit criterion). Best-effort: a member whose UserDO call fails doesn't
+  // exit criterion), and — new in M12 — enqueues `push-queue` for whichever
+  // of those members has no live socket at all (docs/03 §2.1: "After each
+  // accepted `send`, the DO: broadcasts → enqueues push-queue for members
+  // with no live socket"). One `hasLiveSocket` RPC decides both: a member
+  // with a live socket is already seeing `broadcast`'s `message` frame, so a
+  // push notification for the same message would be redundant. Best-effort
+  // throughout — a member whose UserDO call or push enqueue fails doesn't
   // block message delivery, which already succeeded via `broadcast` above.
-  private async notifyUnread(conversationId: string, senderId: string): Promise<void> {
+  private async notifyOtherMembers(
+    conversationId: string,
+    message: Message,
+    senderId: string,
+  ): Promise<void> {
     const others = [
       ...this.ctx.storage.sql.exec<{ user_id: string }>(
         `SELECT user_id FROM members_cache WHERE status = 'member' AND user_id != ?`,
         senderId,
       ),
     ];
+    if (others.length === 0) return;
+
+    // Read once, reused for every offline member's push title — cheaper than
+    // a per-member profile lookup, and the sender is the same for all of them.
+    const senderProfile = await profilesRepo
+      .getProfile(this.env, { userId: senderId, sessionId: '', emailVerified: true }, senderId)
+      .catch(() => undefined);
+    const title = senderProfile?.displayName ?? 'New message';
+    const body = previewTextFor(message.kind, message.body);
+
     await Promise.all(
-      others.map((m) =>
-        userStub(this.env, m.user_id)
-          .bumpUnread(conversationId)
-          .catch((err) => console.error('UserDO.bumpUnread failed', err)),
-      ),
+      others.map(async (m) => {
+        const stub = userStub(this.env, m.user_id);
+        await stub.bumpUnread(conversationId).catch((err) => {
+          console.error('UserDO.bumpUnread failed', err);
+        });
+        const hasLiveSocket = await stub.hasLiveSocket().catch(() => true); // fail closed: don't push on an RPC error
+        if (hasLiveSocket) return;
+        await enqueuePush(
+          this.env,
+          m.user_id,
+          { type: 'message', title, body, tag: `msg-${conversationId}`, data: { url: `/c/${conversationId}` } },
+          { urgency: 'normal', ttl: 60 * 60 * 24 },
+        ).catch((err) => console.error('push enqueue failed', err));
+      }),
     );
   }
 

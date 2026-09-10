@@ -11,7 +11,9 @@ import { healthRoute } from './routes/health';
 import { invitesRoute } from './routes/invites';
 import { meRoute } from './routes/me';
 import { messagesRoute } from './routes/messages';
+import { pushRoute } from './routes/push';
 import { wsRoute } from './routes/ws';
+import { handlePushQueue } from './push/consumer';
 import type { Env } from './env';
 
 // Workers requires every Durable Object class referenced in wrangler.jsonc's
@@ -55,6 +57,7 @@ app.route('/api/invites', invitesRoute);
 app.route('/api/conversations', conversationsRoute);
 app.route('/api/messages', messagesRoute);
 app.route('/api/attachments', attachmentsRoute);
+app.route('/api/push', pushRoute);
 app.route('/api/ws', wsRoute);
 
 // Fallback for anything not handled above: hand off to Workers Static Assets,
@@ -69,5 +72,10 @@ export default {
   // this dispatches on schedule since there's only the one so far.
   scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(sweepOrphanAttachments(env));
+  },
+  // `push-queue` consumer (docs/03 §4, docs/09 M12) — wrangler.jsonc's
+  // `queues.consumers` entry routes every enqueued push job here.
+  queue(batch: MessageBatch<unknown>, env: Env) {
+    return handlePushQueue(batch, env);
   },
 };
