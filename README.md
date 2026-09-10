@@ -24,9 +24,11 @@ pnpm cf-typegen      # regenerate worker-configuration.d.ts after editing wrangl
 
 ## Status
 
-**M0 — Repo & toolchain** complete: Vite + React 19 + TS strict + Tailwind 4 +
-shadcn/ui on the client, Hono on Workers + Static Assets serving the SPA,
-`@cloudflare/vitest-pool-workers` wired for server tests, ESLint layering
-rules (drizzle/`env.DB` restricted to `src/server/repos/**`, added ahead of
-M1), CI skeleton. See `docs/09-ROADMAP.md` for what's next (M1: D1 schema +
-repos).
+**M0–M15 complete** — all 15 roadmap milestones shipped: toolchain, D1 schema
++ repos, policy layer, Better Auth, app shell/PWA, friends & invites,
+ConversationDO text chat, UserDO + presence, offline outbox, file + camera
+attachments, voice messages, push notifications, WebRTC voice calls with
+call push/ring, and settings/privacy/hardening/launch. Staging deploy +
+Brevo transactional email wired. Current work is post-launch bug fixing
+(UI polish, call state, PWA/service-worker edge cases) — see recent commits
+and `docs/09-ROADMAP.md` for the full milestone spec.
