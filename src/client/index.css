@@ -25,3 +25,18 @@
   left: 0.5rem;
   top: 0.5rem;
 }
+
+/* Window Controls Overlay (docs/06-PWA-CHROMEOS): the manifest's
+   display_override puts the header behind the OS window controls unless it
+   reserves env(titlebar-area-*) space and marks itself draggable. Without
+   this the traffic-light buttons overlap the nav and the bar can't move the
+   window. titlebar-area-* is 0/100% when WCO isn't active (normal browser
+   tab), so this is a no-op there. */
+.titlebar-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
