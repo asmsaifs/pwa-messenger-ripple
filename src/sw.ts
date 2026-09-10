@@ -119,8 +119,19 @@ self.addEventListener('push', (event: PushEvent) => {
       // (or about to).
       if (callUrl) {
         const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        console.log(
+          '[sw] call push',
+          callUrl,
+          'existing window clients:',
+          clientsList.map((c) => ({ url: c.url, visibilityState: c.visibilityState, focused: c.focused })),
+        );
         if (clientsList.length === 0) {
-          await self.clients.openWindow(callUrl);
+          try {
+            const opened = await self.clients.openWindow(callUrl);
+            console.log('[sw] openWindow result', opened ? opened.url : opened);
+          } catch (err) {
+            console.error('[sw] openWindow threw', err);
+          }
         }
       }
     })(),
