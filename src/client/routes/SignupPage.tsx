@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Turnstile } from '../components/Turnstile';
 import { AuthClientError, signUpEmail } from '../lib/auth-client';
 
@@ -37,74 +39,73 @@ export function SignupPage() {
 
   if (submitted) {
     return (
-      <div className="text-center">
-        <h1 className="text-xl font-semibold">Check your email</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          We sent a verification link to {email}. Verify it, then{' '}
-          <Link to="/login" className="text-blue-600 hover:underline">
-            log in
-          </Link>
-          .
-        </p>
-      </div>
+      <Card>
+        <CardContent className="pt-5 text-center sm:pt-5">
+          <h1 className="font-display text-xl font-semibold text-ink">Check your email</h1>
+          <p className="mt-2 text-sm text-ink-muted">
+            We sent a verification link to {email}. Verify it, then{' '}
+            <Link to="/login" className="text-brand-600 hover:underline dark:text-brand-400">
+              log in
+            </Link>
+            .
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Sign up</h1>
-      {invite && <p className="text-sm text-slate-500">Joining via invite.</p>}
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-xl">Sign up</CardTitle>
+        {invite && <p className="text-sm text-ink-muted">Joining via invite.</p>}
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            Name
+            <Input required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Name
-        <input
-          required
-          autoComplete="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-      </label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            Email
+            <Input
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Email
-        <input
-          type="email"
-          required
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-      </label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+            Password
+            <Input
+              type="password"
+              required
+              minLength={10}
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Password
-        <input
-          type="password"
-          required
-          minLength={10}
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-      </label>
+          {TURNSTILE_SITE_KEY && <Turnstile siteKey={TURNSTILE_SITE_KEY} onToken={setCaptchaToken} />}
 
-      {TURNSTILE_SITE_KEY && <Turnstile siteKey={TURNSTILE_SITE_KEY} onToken={setCaptchaToken} />}
+          {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+          <Button type="submit" disabled={submitting || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)} className="mt-1">
+            {submitting ? 'Signing up…' : 'Sign up'}
+          </Button>
 
-      <Button type="submit" disabled={submitting || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}>
-        {submitting ? 'Signing up…' : 'Sign up'}
-      </Button>
-
-      <p className="text-center text-sm text-slate-500">
-        Already have an account?{' '}
-        <Link to="/login" className="hover:underline">
-          Log in
-        </Link>
-      </p>
-    </form>
+          <p className="text-center text-sm text-ink-muted">
+            Already have an account?{' '}
+            <Link to="/login" className="text-brand-600 hover:underline dark:text-brand-400">
+              Log in
+            </Link>
+          </p>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

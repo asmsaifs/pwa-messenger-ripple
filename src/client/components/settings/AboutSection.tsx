@@ -1,15 +1,15 @@
 // docs/04 §"Settings": "About (version, build sha, licenses)".
 export function AboutSection() {
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">About</h2>
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">About</h2>
       <dl className="mt-3 space-y-2 text-sm">
         <div className="flex justify-between gap-4">
-          <dt className="text-slate-500 dark:text-slate-400">Version</dt>
+          <dt className="text-ink-muted">Version</dt>
           <dd>{__APP_VERSION__}</dd>
         </div>
         <div className="flex justify-between gap-4">
-          <dt className="text-slate-500 dark:text-slate-400">Build</dt>
+          <dt className="text-ink-muted">Build</dt>
           <dd className="font-mono">{__APP_BUILD_SHA__}</dd>
         </div>
       </dl>

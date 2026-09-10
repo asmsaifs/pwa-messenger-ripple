@@ -1,6 +1,8 @@
 import { Link, NavLink, Outlet, useMatch } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useConversations } from '../lib/queries/conversations';
+import { Avatar } from '../components/ui/avatar';
+import { Badge } from '../components/ui/badge';
 import type { ConversationSummary } from '@shared/conversations';
 
 function relativeTime(ms: number | null): string {
@@ -30,13 +32,13 @@ export function ChatShellLayout() {
     <div className="grid min-h-0 flex-1 lg:grid-cols-[360px_1fr]">
       <aside
         className={cn(
-          'min-h-0 overflow-y-auto border-slate-200 lg:block lg:border-r dark:border-slate-700',
+          'min-h-0 overflow-y-auto border-border-subtle bg-surface lg:block lg:border-r',
           showThreadOnMobile ? 'hidden' : 'block',
         )}
       >
         <ConversationListPane />
       </aside>
-      <section className={cn('min-h-0 lg:block', showThreadOnMobile ? 'block' : 'hidden lg:block')}>
+      <section className={cn('min-h-0 bg-surface lg:block', showThreadOnMobile ? 'block' : 'hidden lg:block')}>
         <Outlet />
       </section>
     </div>
@@ -48,12 +50,12 @@ function ConversationListPane() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-700">
-        <h1 className="text-base font-semibold">Chats</h1>
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border-subtle px-4">
+        <h1 className="font-display text-lg font-semibold text-ink">Chats</h1>
       </div>
 
       {isPending && (
-        <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+        <div className="flex flex-1 items-center justify-center text-sm text-ink-muted">
           Loading…
         </div>
       )}
@@ -65,9 +67,9 @@ function ConversationListPane() {
       )}
 
       {data && data.conversations.length === 0 && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-slate-500">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-ink-muted">
           <p>No conversations yet.</p>
-          <Link to="/friends" className="text-blue-600 hover:underline">
+          <Link to="/friends" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
             Invite a friend by email
           </Link>
         </div>
@@ -81,42 +83,27 @@ function ConversationListPane() {
                 to={`/c/${conversation.id}`}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 border-b border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900',
-                    isActive && 'bg-slate-100 dark:bg-slate-800',
+                    'flex items-center gap-3 border-b border-border-subtle px-4 py-3 transition-colors hover:bg-surface-sunken',
+                    isActive && 'bg-brand-50 dark:bg-brand-900/20',
                   )
                 }
               >
-                <div className="relative shrink-0">
-                  <div className="flex size-10 items-center justify-center rounded-full bg-slate-200 text-sm font-medium text-slate-600">
-                    {conversation.peerDisplayName.slice(0, 1).toUpperCase()}
-                  </div>
-                  <span
-                    className={cn(
-                      'absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-white',
-                      conversation.peerPresence === 'online' && 'bg-emerald-500',
-                      conversation.peerPresence === 'away' && 'bg-amber-400',
-                      conversation.peerPresence === 'offline' && 'bg-slate-300',
-                    )}
-                  />
-                </div>
+                <Avatar name={conversation.peerDisplayName} presence={conversation.peerPresence} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-50">
+                    <span className="truncate text-sm font-medium text-ink">
                       {conversation.peerDisplayName}
                     </span>
-                    <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">
+                    <span className="shrink-0 text-xs text-ink-muted">
                       {relativeTime(conversation.lastMessageAt)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm text-slate-500 dark:text-slate-400">{previewFor(conversation)}</span>
+                    <span className="truncate text-sm text-ink-muted">{previewFor(conversation)}</span>
                     {conversation.unreadCount > 0 && (
-                      <span
-                        data-testid="unread-badge"
-                        className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white"
-                      >
+                      <Badge data-testid="unread-badge" className="size-5 px-0">
                         {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 </div>

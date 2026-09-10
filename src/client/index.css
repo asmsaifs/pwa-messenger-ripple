@@ -1,7 +1,55 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Manrope', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Ripple Calm design system — see Stitch project "Ripple — voice chat PWA".
+     One indigo accent, neutral slate everywhere else, soft roundness. */
+  --color-brand-50: #eef1fe;
+  --color-brand-100: #dfe4fd;
+  --color-brand-200: #c1c9fb;
+  --color-brand-300: #9ba8f7;
+  --color-brand-400: #7482f2;
+  --color-brand-500: #4f6ef7;
+  --color-brand-600: #3d55e0;
+  --color-brand-700: #3143b8;
+  --color-brand-800: #2a3890;
+  --color-brand-900: #253072;
+
+  --color-online: #10b981;
+  --color-away: #f59e0b;
+
+  --radius-card: 1rem;
+}
+
+/* Semantic tokens (light default, .dark override) so components read
+   `bg-surface` / `text-ink` etc. instead of repeating slate-50/slate-950
+   pairs everywhere. Kept as plain CSS vars (not @theme) since they change
+   value under .dark rather than being fixed design constants. */
+:root {
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f8fafc;
+  --ink: #0f172a;
+  --ink-muted: #64748b;
+  --border-subtle: #e2e8f0;
+}
+.dark {
+  --surface: #0b1220;
+  --surface-raised: #111a2e;
+  --surface-sunken: #0b1220;
+  --ink: #f1f5f9;
+  --ink-muted: #94a3b8;
+  --border-subtle: #1e293b;
+}
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-border-subtle: var(--border-subtle);
 }
 
 /* M15 dark mode: a manual `.dark` class on <html>, toggled by
@@ -11,6 +59,12 @@
    user picks light/dark explicitly, which a media-query-only variant can't
    express. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--surface-sunken);
+  color: var(--ink);
+}
 
 .skip-link {
   position: absolute;

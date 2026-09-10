@@ -113,13 +113,13 @@ export function AudioDevicesSection() {
   const outputDevices = devices.filter((d) => d.kind === 'audiooutput');
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Audio devices</h2>
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Audio devices</h2>
       <audio ref={testAudioRef} hidden />
 
       <div className="mt-3 space-y-3">
         <div>
-          <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Microphone</p>
+          <p className="mb-1 text-xs text-ink-muted">Microphone</p>
           <Select
             value={inputId ?? ''}
             onValueChange={(id) => {
@@ -142,7 +142,7 @@ export function AudioDevicesSection() {
 
         {supportsSinkId && (
           <div>
-            <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Speaker</p>
+            <p className="mb-1 text-xs text-ink-muted">Speaker</p>
             <Select
               value={outputId ?? ''}
               onValueChange={(id) => {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import {
   Dialog,
   DialogContent,
@@ -41,8 +42,8 @@ export function DataSection() {
   }
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Data</h2>
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Data</h2>
 
       <div className="mt-3">
         <Button
@@ -54,7 +55,7 @@ export function DataSection() {
           Export my data
         </Button>
         {exportStatus.data?.status === 'pending' && (
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-2 text-sm text-ink-muted">
             Preparing your export — we'll notify you when it's ready.
           </p>
         )}
@@ -62,7 +63,7 @@ export function DataSection() {
           <p className="mt-2 text-sm">
             <a
               href={exportStatus.data.downloadUrl}
-              className="text-slate-900 underline dark:text-slate-50"
+              className="text-brand-600 underline dark:text-brand-400"
             >
               Download your data
             </a>
@@ -93,13 +94,12 @@ export function DataSection() {
           <label htmlFor="delete-account-password" className="sr-only">
             Password
           </label>
-          <input
+          <Input
             id="delete-account-password"
             type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
           />
           {deleteError && (
             <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">

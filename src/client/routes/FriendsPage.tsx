@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Avatar } from '../components/ui/avatar';
+import { Badge } from '../components/ui/badge';
 import { messageForErrorCode } from '../lib/errors/messages';
 import { ApiError } from '../lib/api';
 import {
@@ -12,6 +15,7 @@ import {
   useResendInvitation,
   useRevokeInvitation,
 } from '../lib/queries/friends';
+import { cn } from '@/lib/utils';
 import type { FriendRequestSummary, FriendSummary, InvitationSummary } from '@shared/friends';
 
 const TABS = ['friends', 'requests', 'invited'] as const;
@@ -44,25 +48,26 @@ function InviteForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row sm:items-start">
-      <div className="flex flex-1 flex-col gap-1">
-        <label htmlFor="invite-email" className="sr-only">
-          Email
-        </label>
-        <input
-          id="invite-email"
-          type="email"
-          required
-          placeholder="friend@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-        {message && <p className="text-sm text-slate-500">{message}</p>}
+    <form onSubmit={handleSubmit} className="rounded-card border border-border-subtle bg-surface p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <div className="flex flex-1 flex-col gap-1">
+          <label htmlFor="invite-email" className="sr-only">
+            Email
+          </label>
+          <Input
+            id="invite-email"
+            type="email"
+            required
+            placeholder="friend@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          {message && <p className="text-sm text-ink-muted">{message}</p>}
+        </div>
+        <Button type="submit" disabled={invite.isPending}>
+          {invite.isPending ? 'Sending…' : 'Invite'}
+        </Button>
       </div>
-      <Button type="submit" disabled={invite.isPending}>
-        {invite.isPending ? 'Sending…' : 'Invite'}
-      </Button>
     </form>
   );
 }
@@ -71,12 +76,15 @@ function FriendRow({ friend }: { friend: FriendSummary }) {
   const block = useBlockFriendship();
   const remove = useRemoveFriendship();
   return (
-    <li className="flex items-center justify-between border-b border-slate-100 py-3">
-      <div>
-        <p className="text-sm font-medium">{friend.displayName}</p>
-        {friend.statusText && <p className="text-xs text-slate-500">{friend.statusText}</p>}
+    <li className="flex items-center justify-between gap-3 border-b border-border-subtle py-3 last:border-0">
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar name={friend.displayName} size="sm" />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-ink">{friend.displayName}</p>
+          {friend.statusText && <p className="truncate text-xs text-ink-muted">{friend.statusText}</p>}
+        </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex shrink-0 gap-2">
         <Button variant="outline" size="sm" onClick={() => remove.mutate(friend.friendshipId)}>
           Remove
         </Button>
@@ -92,10 +100,13 @@ function RequestRow({ request, direction }: { request: FriendRequestSummary; dir
   const accept = useAcceptFriendship();
   const decline = useDeclineFriendship();
   return (
-    <li className="flex items-center justify-between border-b border-slate-100 py-3">
-      <p className="text-sm font-medium">{request.displayName}</p>
+    <li className="flex items-center justify-between gap-3 border-b border-border-subtle py-3 last:border-0">
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar name={request.displayName} size="sm" />
+        <p className="truncate text-sm font-medium text-ink">{request.displayName}</p>
+      </div>
       {direction === 'incoming' ? (
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <Button size="sm" onClick={() => accept.mutate(request.friendshipId)}>
             Accept
           </Button>
@@ -116,25 +127,27 @@ function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
   const resend = useResendInvitation();
   const revoke = useRevokeInvitation();
   return (
-    <li className="flex items-center justify-between border-b border-slate-100 py-3">
-      <div>
-        <p className="text-sm font-medium">{invitation.email}</p>
-        <p className="text-xs text-slate-500">
-          Expires {new Date(invitation.expiresAt).toLocaleDateString()}
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={resend.isPending}
-          onClick={() => resend.mutate(invitation.id)}
-        >
-          Resend
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => revoke.mutate(invitation.id)}>
-          Revoke
-        </Button>
+    <li className="flex flex-col gap-1 border-b border-border-subtle py-3 last:border-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-ink">{invitation.email}</p>
+          <p className="text-xs text-ink-muted">
+            Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={resend.isPending}
+            onClick={() => resend.mutate(invitation.id)}
+          >
+            Resend
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => revoke.mutate(invitation.id)}>
+            Revoke
+          </Button>
+        </div>
       </div>
       {resend.isError && (
         <p className="text-xs text-red-600">
@@ -150,36 +163,35 @@ export function FriendsPage() {
   const friends = useFriends();
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <h1 className="text-lg font-semibold">Friends</h1>
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
+      <h1 className="font-display text-lg font-semibold text-ink">Friends</h1>
       <InviteForm />
 
-      <nav className="flex gap-4 border-b border-slate-200 text-sm dark:border-slate-700">
+      <nav className="flex gap-4 border-b border-border-subtle text-sm">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-1 py-2 capitalize ${
-              tab === t
-                ? 'border-slate-900 font-medium text-slate-900 dark:border-slate-50 dark:text-slate-50'
-                : 'border-transparent text-slate-500 dark:text-slate-400'
-            }`}
+            className={cn(
+              '-mb-px flex items-center gap-1.5 border-b-2 px-1 py-2 capitalize transition-colors',
+              tab === t ? 'border-brand-500 font-medium text-brand-700 dark:text-brand-300' : 'border-transparent text-ink-muted hover:text-ink',
+            )}
           >
             {t}
-            {t === 'requests' && friends.data && friends.data.incoming.length > 0
-              ? ` (${friends.data.incoming.length})`
-              : ''}
+            {t === 'requests' && friends.data && friends.data.incoming.length > 0 && (
+              <Badge>{friends.data.incoming.length}</Badge>
+            )}
           </button>
         ))}
       </nav>
 
-      {friends.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+      {friends.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {friends.isError && <p className="text-sm text-red-600">Couldn't load friends. Try again.</p>}
 
       {friends.data && tab === 'friends' && (
-        <ul>
+        <ul className="rounded-card border border-border-subtle bg-surface px-4">
           {friends.data.friends.length === 0 && (
-            <p className="text-sm text-slate-500">No friends yet — invite someone above.</p>
+            <p className="py-4 text-sm text-ink-muted">No friends yet — invite someone above.</p>
           )}
           {friends.data.friends.map((f) => (
             <FriendRow key={f.friendshipId} friend={f} />
@@ -190,10 +202,10 @@ export function FriendsPage() {
       {friends.data && tab === 'requests' && (
         <div className="flex flex-col gap-4">
           <div>
-            <h2 className="mb-1 text-sm font-medium text-slate-500">Incoming</h2>
-            <ul>
+            <h2 className="mb-1 text-sm font-medium text-ink-muted">Incoming</h2>
+            <ul className="rounded-card border border-border-subtle bg-surface px-4">
               {friends.data.incoming.length === 0 && (
-                <p className="text-sm text-slate-500">No incoming requests.</p>
+                <p className="py-4 text-sm text-ink-muted">No incoming requests.</p>
               )}
               {friends.data.incoming.map((r) => (
                 <RequestRow key={r.friendshipId} request={r} direction="incoming" />
@@ -201,10 +213,10 @@ export function FriendsPage() {
             </ul>
           </div>
           <div>
-            <h2 className="mb-1 text-sm font-medium text-slate-500">Outgoing</h2>
-            <ul>
+            <h2 className="mb-1 text-sm font-medium text-ink-muted">Outgoing</h2>
+            <ul className="rounded-card border border-border-subtle bg-surface px-4">
               {friends.data.outgoing.length === 0 && (
-                <p className="text-sm text-slate-500">No outgoing requests.</p>
+                <p className="py-4 text-sm text-ink-muted">No outgoing requests.</p>
               )}
               {friends.data.outgoing.map((r) => (
                 <RequestRow key={r.friendshipId} request={r} direction="outgoing" />
@@ -215,9 +227,9 @@ export function FriendsPage() {
       )}
 
       {friends.data && tab === 'invited' && (
-        <ul>
+        <ul className="rounded-card border border-border-subtle bg-surface px-4">
           {friends.data.invitations.length === 0 && (
-            <p className="text-sm text-slate-500">No pending invitations.</p>
+            <p className="py-4 text-sm text-ink-muted">No pending invitations.</p>
           )}
           {friends.data.invitations.map((inv) => (
             <InvitationRow key={inv.id} invitation={inv} />

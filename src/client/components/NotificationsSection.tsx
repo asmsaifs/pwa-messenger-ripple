@@ -14,9 +14,9 @@ export function NotificationsSection() {
 
   if (!pushSupported()) {
     return (
-      <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-        <h2 className="text-sm font-semibold">Notifications</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+      <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+        <h2 className="font-display text-sm font-semibold text-ink">Notifications</h2>
+        <p className="mt-1 text-sm text-ink-muted">
           Not supported in this browser.
         </p>
       </section>
@@ -27,9 +27,9 @@ export function NotificationsSection() {
   const isOn = permission === 'granted' && subscribed.data === true;
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Notifications</h2>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Notifications</h2>
+      <p className="mt-1 text-sm text-ink-muted">
         {permission === 'denied'
           ? 'Blocked in browser settings — re-enable it there to get notified.'
           : isOn
@@ -67,7 +67,7 @@ export function NotificationsSection() {
         )}
       </div>
       {isOn && (
-        <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+        <p className="mt-3 text-xs text-ink-muted">
           For incoming calls: closing Ripple entirely only gets you a single
           notification chime. Minimize the window instead of closing it to
           hear the full ringtone.

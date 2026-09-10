@@ -153,7 +153,14 @@ export function CallPage() {
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-        <div className="flex size-24 items-center justify-center rounded-full bg-slate-700 text-3xl font-semibold">
+        <div
+          className={
+            'flex size-24 items-center justify-center rounded-full bg-brand-500/20 text-3xl font-semibold text-brand-200 ' +
+            (status === 'incoming-ringing' || status === 'outgoing-ringing' || status === 'connecting'
+              ? 'animate-pulse ring-4 ring-brand-500/40'
+              : '')
+          }
+        >
           {peer?.displayName?.[0]?.toUpperCase() ?? '?'}
         </div>
         <p className="text-lg font-medium">{peer?.displayName ?? 'Unknown'}</p>
@@ -186,7 +193,7 @@ export function CallPage() {
           {inputDevices.length > 0 && (
             <select
               aria-label="Microphone"
-              className="rounded bg-slate-800 px-2 py-1 text-xs text-white"
+              className="rounded-lg bg-slate-800 px-2 py-1 text-xs text-white"
               onChange={(e) => void switchInputDevice(e.target.value)}
             >
               {inputDevices.map((d) => (
@@ -199,7 +206,7 @@ export function CallPage() {
           {supportsSinkId && outputDevices.length > 0 && (
             <select
               aria-label="Speaker"
-              className="rounded bg-slate-800 px-2 py-1 text-xs text-white"
+              className="rounded-lg bg-slate-800 px-2 py-1 text-xs text-white"
               onChange={(e) => {
                 if (audioRef.current) void setOutputDevice(audioRef.current, e.target.value);
               }}

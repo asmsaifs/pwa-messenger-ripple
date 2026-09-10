@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Avatar } from '../ui/avatar';
 import { useMe, useUpdateMe } from '../../lib/queries/me';
 
 // docs/04 §"Settings": "Profile (name, avatar crop, status)". Avatar crop
@@ -30,32 +32,32 @@ export function ProfileSection() {
   }
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Profile</h2>
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Profile</h2>
       {editing ? (
         <div className="mt-3 space-y-3">
           <div>
-            <label htmlFor="settings-display-name" className="text-xs text-slate-500 dark:text-slate-400">
+            <label htmlFor="settings-display-name" className="text-xs text-ink-muted">
               Name
             </label>
-            <input
+            <Input
               id="settings-display-name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={50}
-              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1"
             />
           </div>
           <div>
-            <label htmlFor="settings-status" className="text-xs text-slate-500 dark:text-slate-400">
+            <label htmlFor="settings-status" className="text-xs text-ink-muted">
               Status
             </label>
-            <input
+            <Input
               id="settings-status"
               value={statusText}
               onChange={(e) => setStatusText(e.target.value)}
               maxLength={140}
-              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1"
             />
           </div>
           {update.isError && (
@@ -78,16 +80,19 @@ export function ProfileSection() {
         </div>
       ) : (
         <dl className="mt-3 space-y-2 text-sm">
+          <div className="mb-3 flex items-center gap-3">
+            <Avatar name={me.data.profile.displayName} size="lg" presence="online" />
+          </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-slate-500 dark:text-slate-400">Name</dt>
+            <dt className="text-ink-muted">Name</dt>
             <dd className="text-right">{me.data.profile.displayName}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-slate-500 dark:text-slate-400">Status</dt>
+            <dt className="text-ink-muted">Status</dt>
             <dd className="text-right">{me.data.profile.statusText || '—'}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-slate-500 dark:text-slate-400">Email</dt>
+            <dt className="text-ink-muted">Email</dt>
             <dd className="text-right">{me.data.user.email}</dd>
           </div>
           <Button size="sm" variant="outline" className="mt-1" onClick={startEditing}>

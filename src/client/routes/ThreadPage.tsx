@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { Avatar } from '../components/ui/avatar';
 import { CameraCaptureSheet } from '../components/CameraCaptureSheet';
 import { VoiceRecorderSheet } from '../components/VoiceRecorderSheet';
 import { VoiceMessagePlayer } from '../components/VoiceMessagePlayer';
@@ -285,24 +286,27 @@ export function ThreadPage() {
       {/* Not user-facing chrome — a hook for e2e specs to wait on the socket
           actually being open before driving frames through it. */}
       <span hidden data-testid="ws-status" data-status={status} />
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 px-4">
+      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle bg-surface px-4">
         <Link
           to="/chats"
-          className="text-sm text-slate-500 hover:text-slate-900 lg:hidden"
+          className="text-sm text-ink-muted hover:text-ink lg:hidden"
         >
           ← Back
         </Link>
-        {isPending && <span className="text-sm text-slate-400">Loading…</span>}
+        {isPending && <span className="text-sm text-ink-muted">Loading…</span>}
         {isError && (
           <span className="text-sm text-red-600">Couldn't load this conversation.</span>
         )}
         {data && (
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">{data.peer.displayName}</div>
-            <div className="truncate text-xs text-slate-400" data-testid="peer-status">
-              {typing?.userId === data.peer.userId ? 'typing…' : 'online'}
+          <>
+            <Avatar name={data.peer.displayName} presence="online" size="sm" className="hidden sm:inline-flex" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-ink">{data.peer.displayName}</div>
+              <div className="truncate text-xs text-ink-muted" data-testid="peer-status">
+                {typing?.userId === data.peer.userId ? 'typing…' : 'online'}
+              </div>
             </div>
-          </div>
+          </>
         )}
         {data && (
           <button
@@ -311,7 +315,7 @@ export function ThreadPage() {
             onClick={() => void handleStartCall()}
             disabled={!isOnline || (callStatus !== 'idle' && callStatus !== 'ended')}
             title={!isOnline ? "You're offline" : undefined}
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Call"
           >
             📞
@@ -337,14 +341,14 @@ export function ThreadPage() {
         </div>
       )}
 
-      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto px-4">
+      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto bg-surface-sunken px-4">
         {status === 'connecting' && messages.length === 0 && (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">
+          <div className="flex h-full items-center justify-center text-sm text-ink-muted">
             Connecting…
           </div>
         )}
         {status !== 'connecting' && messages.length === 0 && (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">
+          <div className="flex h-full items-center justify-center text-sm text-ink-muted">
             No messages yet — say hi.
           </div>
         )}
@@ -365,7 +369,7 @@ export function ThreadPage() {
                     right: 0,
                     transform: `translateY(${item.start}px)`,
                   }}
-                  className="py-2 text-center text-xs text-slate-400"
+                  className="py-2 text-center text-xs text-ink-muted"
                 >
                   {row.label}
                 </div>
@@ -386,7 +390,7 @@ export function ThreadPage() {
                     right: 0,
                     transform: `translateY(${item.start}px)`,
                   }}
-                  className="py-2 text-center text-xs text-slate-400"
+                  className="py-2 text-center text-xs text-ink-muted"
                 >
                   📞 {message.body}
                 </div>
@@ -424,8 +428,8 @@ export function ThreadPage() {
               >
                 <div
                   className={cn(
-                    'max-w-[75%] rounded-2xl px-3 py-2 text-sm',
-                    own ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-900',
+                    'max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm',
+                    own ? 'bg-brand-500 text-white' : 'bg-surface text-ink',
                   )}
                 >
                   {message.deletedAt ? (
@@ -471,7 +475,7 @@ export function ThreadPage() {
           onClose={() => setVoiceOpen(false)}
         />
       ) : (
-      <div className="flex items-end gap-2 border-t border-slate-200 p-3">
+      <div className="flex items-end gap-2 border-t border-border-subtle bg-surface p-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -488,7 +492,7 @@ export function ThreadPage() {
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           data-testid="attach-button"
-          className="text-slate-500 hover:text-slate-900 disabled:opacity-40"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
           aria-label="Attach file"
         >
           {uploading ? '…' : '＋'}
@@ -511,7 +515,7 @@ export function ThreadPage() {
           onClick={() => setCameraOpen(true)}
           disabled={uploading}
           data-testid="camera-button"
-          className="text-slate-500 hover:text-slate-900 disabled:opacity-40"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
           aria-label="Take photo"
         >
           📷
@@ -521,7 +525,7 @@ export function ThreadPage() {
           onClick={() => setVoiceOpen(true)}
           disabled={uploading}
           data-testid="voice-button"
-          className="text-slate-500 hover:text-slate-900 disabled:opacity-40"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
           aria-label="Record voice message"
         >
           🎤
@@ -541,14 +545,14 @@ export function ThreadPage() {
           rows={1}
           placeholder="Message"
           data-testid="composer-input"
-          className="min-h-9 flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="min-h-9 flex-1 resize-none rounded-xl border border-slate-300 bg-surface px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700"
         />
         <button
           type="button"
           onClick={handleSend}
           disabled={!draft.trim()}
           data-testid="composer-send"
-          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+          className="rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
         >
           Send
         </button>

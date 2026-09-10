@@ -12,12 +12,12 @@ export function DevicesSection() {
   const revoke = useRevokeSession();
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Devices</h2>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Devices</h2>
+      <p className="mt-1 text-sm text-ink-muted">
         Everywhere you're currently signed in.
       </p>
-      {sessions.isLoading && <p className="mt-3 text-sm text-slate-500">Loading…</p>}
+      {sessions.isLoading && <p className="mt-3 text-sm text-ink-muted">Loading…</p>}
       {sessions.isError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">Couldn't load devices.</p>}
       <ul className="mt-3 space-y-3">
         {sessions.data?.sessions.map((s) => (
@@ -25,9 +25,9 @@ export function DevicesSection() {
             <div className="min-w-0">
               <p className="truncate">
                 {s.userAgent ?? 'Unknown device'}
-                {s.current && <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">(this device)</span>}
+                {s.current && <span className="ml-2 text-xs text-ink-muted">(this device)</span>}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Signed in {formatDate(s.createdAt)}</p>
+              <p className="text-xs text-ink-muted">Signed in {formatDate(s.createdAt)}</p>
             </div>
             {!s.current && (
               <Button

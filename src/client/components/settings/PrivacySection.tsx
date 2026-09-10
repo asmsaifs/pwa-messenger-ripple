@@ -8,13 +8,13 @@ export function PrivacySection() {
   const blocked = friends.data?.blocked ?? [];
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Privacy</h2>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Privacy</h2>
+      <p className="mt-1 text-sm text-ink-muted">
         People you've blocked can't message, call, or see your profile.
       </p>
       {blocked.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Nobody's blocked.</p>
+        <p className="mt-3 text-sm text-ink-muted">Nobody's blocked.</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {blocked.map((b) => (

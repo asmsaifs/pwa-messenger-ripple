@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useClaimInvitation } from '../lib/queries/friends';
+import { LogoMark } from '../components/Logo';
 
 // Landing spot for the signup->verify round trip when signup started from an
 // invite link (SignupPage passes `callbackURL=/invite/claim?token=...` to
@@ -30,5 +31,10 @@ export function ClaimInvitePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  return <p className="text-center text-sm text-slate-500">Setting things up…</p>;
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-surface-sunken text-ink-muted">
+      <LogoMark className="size-8 animate-pulse" />
+      <p className="text-sm">Setting things up…</p>
+    </div>
+  );
 }

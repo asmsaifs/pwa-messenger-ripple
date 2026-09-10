@@ -54,9 +54,9 @@ export function StorageSection() {
   }
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Storage</h2>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Storage</h2>
+      <p className="mt-1 text-sm text-ink-muted">
         {size === null ? 'Calculating…' : `${formatBytes(size)} of cached media on this device.`}
       </p>
       <Button

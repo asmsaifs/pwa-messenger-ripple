@@ -11,8 +11,8 @@ export function AppearanceSection() {
   const { preference, setPreference } = useTheme();
 
   return (
-    <section className="border-t border-slate-200 pt-6 dark:border-slate-700">
-      <h2 className="text-sm font-semibold">Appearance</h2>
+    <section className="rounded-card border border-border-subtle bg-surface p-4 sm:p-5">
+      <h2 className="font-display text-sm font-semibold text-ink">Appearance</h2>
       <div className="mt-3 flex gap-2" role="radiogroup" aria-label="Theme">
         {OPTIONS.map((opt) => (
           <Button

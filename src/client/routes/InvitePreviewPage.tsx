@@ -1,5 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button, buttonVariants } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { Avatar } from '../components/ui/avatar';
 import { ApiError } from '../lib/api';
 import { messageForErrorCode } from '../lib/errors/messages';
 import { useMe } from '../lib/queries/me';
@@ -16,59 +18,64 @@ export function InvitePreviewPage() {
   const navigate = useNavigate();
 
   if (preview.isLoading || me.isLoading) {
-    return <p className="text-center text-sm text-slate-500">Loading…</p>;
+    return <p className="text-center text-sm text-ink-muted">Loading…</p>;
   }
 
   if (preview.isError) {
     const expired =
       preview.error instanceof ApiError && preview.error.code === 'policy/not-found';
     return (
-      <div className="text-center">
-        <h1 className="text-xl font-semibold">Invite not found</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          {expired
-            ? "This invite link has expired or was already used."
-            : 'Something went wrong loading this invite.'}
-        </p>
-      </div>
+      <Card>
+        <CardContent className="pt-5 text-center sm:pt-5">
+          <h1 className="font-display text-xl font-semibold text-ink">Invite not found</h1>
+          <p className="mt-2 text-sm text-ink-muted">
+            {expired
+              ? "This invite link has expired or was already used."
+              : 'Something went wrong loading this invite.'}
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="text-center">
-      <h1 className="text-xl font-semibold">
-        {preview.data?.inviterName} invited you to Ripple
-      </h1>
+    <Card>
+      <CardContent className="flex flex-col items-center gap-3 pt-5 text-center sm:pt-5">
+        <Avatar name={preview.data?.inviterName ?? '?'} size="lg" />
+        <h1 className="font-display text-xl font-semibold text-ink">
+          {preview.data?.inviterName} invited you to Ripple
+        </h1>
 
-      {me.data ? (
-        <>
-          <Button
-            className="mt-4"
-            disabled={claim.isPending}
-            onClick={() =>
-              claim.mutate(token ?? '', {
-                onSuccess: () => void navigate('/chats'),
-              })
-            }
+        {me.data ? (
+          <>
+            <Button
+              className="mt-1 w-full"
+              disabled={claim.isPending}
+              onClick={() =>
+                claim.mutate(token ?? '', {
+                  onSuccess: () => void navigate('/chats'),
+                })
+              }
+            >
+              {claim.isPending ? 'Adding friend…' : 'Add as friend'}
+            </Button>
+            {claim.isError && (
+              <p className="text-sm text-red-600">
+                {claim.error instanceof ApiError
+                  ? messageForErrorCode(claim.error.code)
+                  : 'Something went wrong.'}
+              </p>
+            )}
+          </>
+        ) : (
+          <Link
+            to={`/signup?invite=${encodeURIComponent(token ?? '')}`}
+            className={buttonVariants({ className: 'mt-1 w-full' })}
           >
-            {claim.isPending ? 'Adding friend…' : 'Add as friend'}
-          </Button>
-          {claim.isError && (
-            <p className="mt-2 text-sm text-red-600">
-              {claim.error instanceof ApiError
-                ? messageForErrorCode(claim.error.code)
-                : 'Something went wrong.'}
-            </p>
-          )}
-        </>
-      ) : (
-        <Link
-          to={`/signup?invite=${encodeURIComponent(token ?? '')}`}
-          className={buttonVariants({ className: 'mt-4' })}
-        >
-          Sign up to connect
-        </Link>
-      )}
-    </div>
+            Sign up to connect
+          </Link>
+        )}
+      </CardContent>
+    </Card>
   );
 }
