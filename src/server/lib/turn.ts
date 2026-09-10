@@ -20,6 +20,15 @@ const STUN_FALLBACK: IceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
 
 async function mintTurnCredentials(env: Env): Promise<IceServer[]> {
   if (!env.TURN_API_TOKEN || env.TURN_API_TOKEN === 'dev-only-change-me') {
+    if (env.APP_ENV !== 'development') {
+      // Cross-network calls need a relay candidate; STUN alone only ever
+      // works when both peers can reach each other directly (same LAN/NAT).
+      // A deployed env silently missing TURN_API_TOKEN looks fine on every
+      // same-network test call and then fails every real one — surface it.
+      console.error(
+        `TURN_API_TOKEN missing/placeholder in APP_ENV=${env.APP_ENV}; falling back to STUN-only ICE servers, cross-network calls will not connect`,
+      );
+    }
     return STUN_FALLBACK;
   }
   const res = await fetch(

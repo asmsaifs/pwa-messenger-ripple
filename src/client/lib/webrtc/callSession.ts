@@ -19,6 +19,13 @@ let peerConnection: CallPeerConnection | null = null;
 let localStream: MediaStream | null = null;
 let wakeLock: WakeLockSentinel | null = null;
 let statsTimer: ReturnType<typeof setInterval> | null = null;
+let connectWatchdog: ReturnType<typeof setTimeout> | null = null;
+// ICE across NATs (no shared-LAN host candidate) needs a working TURN relay
+// pair; when it never arrives, `connectionState` can sit in 'connecting' or
+// 'checking' well past what a user reads as "just slow" — the browser's own
+// failure timeout isn't guaranteed to fire promptly. This bound gives the UI
+// a definite end instead of an indefinite spinner.
+const CONNECT_TIMEOUT_MS = 20_000;
 export let remoteStream: MediaStream | null = null;
 let onRemoteStreamChange: ((stream: MediaStream | null) => void) | null = null;
 
@@ -104,6 +111,8 @@ async function pollStats(): Promise<void> {
 function cleanup(): void {
   if (statsTimer) clearInterval(statsTimer);
   statsTimer = null;
+  if (connectWatchdog) clearTimeout(connectWatchdog);
+  connectWatchdog = null;
   releaseWakeLock();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   socket?.close();
@@ -161,6 +170,9 @@ function setupPeerConnection(
   iceServers: ConstructorParameters<typeof CallPeerConnection>[0],
   polite: boolean,
 ): void {
+  connectWatchdog = setTimeout(() => {
+    if (useCallStore.getState().status !== 'ended') endWithLabel('Connection failed', 'call/ice-failed');
+  }, CONNECT_TIMEOUT_MS);
   peerConnection = new CallPeerConnection(iceServers, polite, {
     onLocalDescription: (description) => {
       socket?.send(
@@ -170,6 +182,8 @@ function setupPeerConnection(
     onIceCandidate: (candidate) => socket?.send(iceFrame(candidate)),
     onConnectionStateChange: (state) => {
       if (state === 'connected') {
+        if (connectWatchdog) clearTimeout(connectWatchdog);
+        connectWatchdog = null;
         useCallStore.setState({ status: 'active', startedAt: useCallStore.getState().startedAt ?? Date.now() });
         void acquireWakeLock();
         document.addEventListener('visibilitychange', handleVisibilityChange);
