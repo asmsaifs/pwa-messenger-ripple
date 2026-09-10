@@ -134,7 +134,7 @@ export function CameraCaptureSheet({
         )}
       </div>
 
-      <div className="relative flex-1">
+      <div className="relative min-h-0 flex-1">
         {error && (
           <div className="absolute inset-x-0 top-2 z-10 mx-auto w-fit rounded bg-red-600/90 px-3 py-1 text-xs text-white">
             {error}
@@ -164,7 +164,10 @@ export function CameraCaptureSheet({
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-6 p-4">
+      <div
+        className="flex shrink-0 items-center justify-center gap-6 p-4"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      >
         {phase === 'live' && (
           <button
             type="button"

@@ -21,7 +21,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="mx-auto w-full max-w-md p-6 dark:text-slate-50">
+    <div className="mx-auto w-full max-w-md min-h-0 flex-1 overflow-y-auto p-6 dark:text-slate-50">
       <h1 className="text-lg font-semibold">Settings</h1>
 
       <div className="mt-4 space-y-6">
