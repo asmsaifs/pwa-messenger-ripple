@@ -43,8 +43,8 @@ export function AppLayout() {
         className="titlebar-drag flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-700"
         style={{
           height: 'env(titlebar-area-height, 3.5rem)',
-          paddingInlineStart: 'env(titlebar-area-x, 1rem)',
-          paddingInlineEnd: 'calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%))',
+          marginInlineStart: 'env(titlebar-area-x, 0px)',
+          width: 'env(titlebar-area-width, 100%)',
         }}
       >
         <div className="titlebar-no-drag flex items-center gap-6">
