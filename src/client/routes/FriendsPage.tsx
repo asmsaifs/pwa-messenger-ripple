@@ -154,13 +154,15 @@ export function FriendsPage() {
       <h1 className="text-lg font-semibold">Friends</h1>
       <InviteForm />
 
-      <nav className="flex gap-4 border-b border-slate-200 text-sm">
+      <nav className="flex gap-4 border-b border-slate-200 text-sm dark:border-slate-700">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`-mb-px border-b-2 px-1 py-2 capitalize ${
-              tab === t ? 'border-slate-900 font-medium text-slate-900' : 'border-transparent text-slate-500'
+              tab === t
+                ? 'border-slate-900 font-medium text-slate-900 dark:border-slate-50 dark:text-slate-50'
+                : 'border-transparent text-slate-500 dark:text-slate-400'
             }`}
           >
             {t}
