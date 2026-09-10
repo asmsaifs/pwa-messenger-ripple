@@ -30,7 +30,7 @@ export function ChatShellLayout() {
     <div className="grid min-h-0 flex-1 lg:grid-cols-[360px_1fr]">
       <aside
         className={cn(
-          'min-h-0 overflow-y-auto border-slate-200 lg:block lg:border-r',
+          'min-h-0 overflow-y-auto border-slate-200 lg:block lg:border-r dark:border-slate-700',
           showThreadOnMobile ? 'hidden' : 'block',
         )}
       >
@@ -48,7 +48,7 @@ function ConversationListPane() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-14 items-center justify-between border-b border-slate-200 px-4">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-700">
         <h1 className="text-base font-semibold">Chats</h1>
       </div>
 
@@ -81,8 +81,8 @@ function ConversationListPane() {
                 to={`/c/${conversation.id}`}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 border-b border-slate-100 px-4 py-3 hover:bg-slate-50',
-                    isActive && 'bg-slate-100',
+                    'flex items-center gap-3 border-b border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900',
+                    isActive && 'bg-slate-100 dark:bg-slate-800',
                   )
                 }
               >
@@ -101,15 +101,15 @@ function ConversationListPane() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium text-slate-900">
+                    <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-50">
                       {conversation.peerDisplayName}
                     </span>
-                    <span className="shrink-0 text-xs text-slate-400">
+                    <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">
                       {relativeTime(conversation.lastMessageAt)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm text-slate-500">{previewFor(conversation)}</span>
+                    <span className="truncate text-sm text-slate-500 dark:text-slate-400">{previewFor(conversation)}</span>
                     {conversation.unreadCount > 0 && (
                       <span
                         data-testid="unread-badge"

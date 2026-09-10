@@ -26,7 +26,7 @@ export function AppLayout() {
   const unreadTotal = me.data?.unreadTotal ?? 0;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-white dark:bg-slate-950 dark:text-slate-50">
+    <div className="flex h-dvh flex-col overflow-hidden bg-white dark:bg-slate-950 dark:text-slate-50">
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
