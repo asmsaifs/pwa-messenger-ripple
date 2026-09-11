@@ -19,7 +19,7 @@ export function UpdateToast() {
   return (
     <div
       role="status"
-      className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-lg"
+      className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
     >
       <span>{needRefresh[0] ? 'New version available.' : 'Ready to work offline.'}</span>
       {needRefresh[0] && (
