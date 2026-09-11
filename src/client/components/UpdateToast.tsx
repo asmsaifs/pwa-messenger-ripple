@@ -1,9 +1,12 @@
+import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useCallStore } from '@/store/callStore';
 import { Button } from './ui/button';
 
-// docs/06 §2: "New version available · Reload" toast, and skipWaiting only on
-// this explicit click — never auto-reload mid-call. Suppressing it during an
-// active call is deferred to M13, which is what introduces `callStore`.
+// docs/06 §2: "New version available · Reload" toast, and skipWaiting only
+// once no call is active — never auto-reload mid-call. When a call is
+// active, the toast stays up and the reload is deferred until callStore
+// status returns to idle/ended.
 export function UpdateToast() {
   const { offlineReady, needRefresh, updateServiceWorker } = useRegisterSW({
     onRegisteredSW(_url, registration) {
@@ -13,8 +16,19 @@ export function UpdateToast() {
       window.setInterval(() => void registration.update(), 60 * 60 * 1000);
     },
   });
+  const callStatus = useCallStore((s) => s.status);
+  const callActive =
+    callStatus === 'outgoing-ringing' ||
+    callStatus === 'incoming-ringing' ||
+    callStatus === 'connecting' ||
+    callStatus === 'active';
+
+  useEffect(() => {
+    if (needRefresh[0] && !callActive) void updateServiceWorker(true);
+  }, [needRefresh, callActive, updateServiceWorker]);
 
   if (!needRefresh[0] && !offlineReady[0]) return null;
+  if (needRefresh[0] && !callActive) return null;
 
   return (
     <div
