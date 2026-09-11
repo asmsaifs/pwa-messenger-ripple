@@ -29,7 +29,10 @@ export function WelcomePage() {
           Sign up
         </Link>
         <Link
-          to={{ pathname: '/login', search: errorMessage ? `?error=${searchParams.get('error')}` : undefined }}
+          to={{
+            pathname: '/login',
+            ...(errorMessage ? { search: `?error=${searchParams.get('error')}` } : {}),
+          }}
           className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
         >
           Log in
