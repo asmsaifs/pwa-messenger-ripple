@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { conversationStub } from '../server/lib/conversation-do';
-import { enqueuePush } from '../server/lib/push-queue';
+import { sendWebPushToUser } from '../server/lib/push-send';
 import { userStub } from '../server/lib/user-do';
 import * as callsRepo from '../server/repos/calls';
 import * as profilesRepo from '../server/repos/profiles';
@@ -101,10 +101,12 @@ export class CallDO extends DurableObject<Env> {
   // Push-cancel (docs/03 §2.3: "push-cancel to callee ... so the SW can
   // `notification.close()`") — same `tag` as the original `call` push, which
   // is how a service worker's `notification.close()` finds it to dismiss.
+  // Sent directly (not via `push-queue`) — see `create()`'s incoming-call
+  // push for why call pushes bypass the queue.
   private async pushCancel(userId: string): Promise<void> {
     if (!this.state) return;
     try {
-      await enqueuePush(
+      await sendWebPushToUser(
         this.env,
         userId,
         {
@@ -117,7 +119,7 @@ export class CallDO extends DurableObject<Env> {
         { urgency: 'high', ttl: 30 },
       );
     } catch (err) {
-      console.error('CallDO: push-cancel enqueue failed', err);
+      console.error('CallDO: push-cancel send failed', err);
     }
   }
 
@@ -162,8 +164,13 @@ export class CallDO extends DurableObject<Env> {
         from,
       });
     } else {
+      // Sent directly, not via `push-queue`: the queue's max_batch_timeout
+      // (5s) plus its sequential per-batch delivery would eat into the 30s
+      // ring window, and a queue retry after RING_TIMEOUT has already fired
+      // would just ring a phone for a call that's over. Bypassing it removes
+      // that delay entirely for the one push where every second counts.
       try {
-        await enqueuePush(
+        await sendWebPushToUser(
           this.env,
           input.calleeId,
           {
@@ -176,7 +183,7 @@ export class CallDO extends DurableObject<Env> {
           { urgency: 'high', ttl: 30 },
         );
       } catch (err) {
-        console.error('CallDO: incoming-call push enqueue failed', err);
+        console.error('CallDO: incoming-call push send failed', err);
       }
     }
   }

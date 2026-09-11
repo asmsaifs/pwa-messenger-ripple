@@ -1,4 +1,5 @@
 import { encryptPushPayload, vapidAuthorizationHeader, type PushSubscriptionKeys } from './vapid';
+import * as pushRepo from '../repos/push';
 import type { PushPayload } from '../../shared/push';
 import type { Env } from '../env';
 
@@ -46,4 +47,32 @@ export async function sendWebPush(
   if (res.status === 429 || res.status >= 500) return 'retry';
   console.error('push send: permanent failure', res.status, await res.text().catch(() => ''));
   return 'failed';
+}
+
+// Delivers to every subscription for `userId` in parallel and self-cleans
+// `gone` rows, mirroring src/server/push/consumer.ts's per-subscription
+// handling. Used where a push must not wait behind `push-queue`'s
+// max_batch_timeout (CallDO ring/cancel — a ring already has its own 30s TTL
+// and RING_TIMEOUT alarm, so a queue's exponential retry backoff would just
+// arrive after the call is over anyway). Fire-and-forget: callers already
+// wrap this in try/catch and treat push delivery as best-effort.
+export async function sendWebPushToUser(
+  env: Env,
+  userId: string,
+  payload: PushPayload,
+  opts: { urgency: 'high' | 'normal'; ttl: number },
+): Promise<void> {
+  const subscriptions = await pushRepo.listSubscriptionsForUserId(env, userId);
+  await Promise.all(
+    subscriptions.map(async (sub) => {
+      const result = await sendWebPush(
+        env,
+        { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+        payload,
+        opts,
+      );
+      if (result === 'ok') await pushRepo.markSubscriptionOk(env, sub.id);
+      if (result === 'gone') await pushRepo.deleteSubscriptionById(env, sub.id);
+    }),
+  );
 }

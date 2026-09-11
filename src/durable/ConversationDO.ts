@@ -503,7 +503,7 @@ export class ConversationDO extends DurableObject<Env> {
           this.env,
           m.user_id,
           { type: 'message', title, body, tag: `msg-${conversationId}`, data: { url: `/c/${conversationId}` } },
-          { urgency: 'normal', ttl: 60 * 60 * 24 },
+          { urgency: 'high', ttl: 60 * 60 * 24 },
         ).catch((err) => console.error('push enqueue failed', err));
       }),
     );
