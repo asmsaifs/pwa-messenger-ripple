@@ -67,7 +67,12 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  // The 'navigations' NetworkFirst cache below has no expiration and isn't
+  // covered by cleanupOutdatedCaches() (that only prunes the precache
+  // manifest) — so a stale index.html cached there on a slow load could
+  // survive indefinitely and keep pointing at old, still-cached JS hashes.
+  // Purge it on every activation so a new deploy always forces a fresh fetch.
+  event.waitUntil(caches.delete('navigations').then(() => self.clients.claim()));
 });
 
 // docs/06 §5: Background Sync tag `outbox-flush` replays the Dexie outbox
