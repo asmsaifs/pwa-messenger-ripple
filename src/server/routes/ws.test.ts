@@ -148,6 +148,47 @@ describe('ws routes (ConversationDO WS protocol)', () => {
     ws2.close();
   });
 
+  it('react toggles: same (seq, emoji) from the same user adds then removes, echoed to self', async () => {
+    const { conversationId, a } = await makeConversation('ws-react');
+    const ws = await connect(conversationId, a);
+    await nextFrame(ws); // ready
+
+    ws.send(JSON.stringify({ t: 'send', clientId: 'react-msg', kind: 'text', body: 'hi' }));
+    const sent = await nextFrame(ws);
+    const seq = (sent['message'] as { seq: number }).seq;
+
+    ws.send(JSON.stringify({ t: 'react', seq, emoji: '👍' }));
+    const added = await nextFrame(ws);
+    expect(added).toMatchObject({ t: 'reaction', seq, emoji: '👍', on: true });
+
+    ws.send(JSON.stringify({ t: 'react', seq, emoji: '👍' }));
+    const removed = await nextFrame(ws);
+    expect(removed).toMatchObject({ t: 'reaction', seq, emoji: '👍', on: false });
+
+    ws.close();
+  });
+
+  it('backfill includes reactions on the returned messages', async () => {
+    const { conversationId, a } = await makeConversation('ws-react-backfill');
+    const ws = await connect(conversationId, a);
+    await nextFrame(ws); // ready
+
+    ws.send(JSON.stringify({ t: 'send', clientId: 'react-bf-msg', kind: 'text', body: 'hi' }));
+    const sent = await nextFrame(ws);
+    const seq = (sent['message'] as { seq: number }).seq;
+
+    ws.send(JSON.stringify({ t: 'react', seq, emoji: '❤️' }));
+    await nextFrame(ws); // reaction echo
+
+    ws.send(JSON.stringify({ t: 'hello', lastSeq: 0 }));
+    const backfill = await nextFrame(ws);
+    expect(backfill['t']).toBe('backfill');
+    const reactions = backfill['reactions'] as { seq: number; emoji: string }[];
+    expect(reactions).toContainEqual(expect.objectContaining({ seq, emoji: '❤️' }));
+
+    ws.close();
+  });
+
   it('a stranger cannot open the socket', async () => {
     const { conversationId } = await makeConversation('ws-stranger');
     const stranger = await signUpAndVerify('ws-stranger-x@example.com', 'Stranger');

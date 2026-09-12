@@ -4,10 +4,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Avatar } from '../components/ui/avatar';
 import { CameraCaptureSheet } from '../components/CameraCaptureSheet';
+import { MediaGallery } from '../components/MediaGallery';
 import { VoiceRecorderSheet } from '../components/VoiceRecorderSheet';
 import { VoiceMessagePlayer } from '../components/VoiceMessagePlayer';
 import { resolveAttachmentUrl, uploadAttachment } from '../lib/attachments';
 import { useConversation, useSetReadMarker } from '../lib/queries/conversations';
+import { useMe } from '../lib/queries/me';
 import { useConversationSocket } from '../lib/ws/conversationSocket';
 import { ApiError } from '../lib/api';
 import { messageForErrorCode } from '../lib/errors/messages';
@@ -21,8 +23,13 @@ import type { Message } from '@shared/messages';
 // Fetches the bytes lazily (on click for a file, on mount for an image
 // thumbnail) rather than eagerly for every attachment message in the list —
 // each fetch spends a presigned GET + a network round trip (docs/02 §7's
-// blob cache only helps on a *second* view).
-function AttachmentBubble({ message }: { message: Message }) {
+// blob cache only helps on a *second* view). Images additionally open the
+// full-viewport `MediaGallery` on tap (docs/04 request: "open picture and
+// download ... scaled to full window view with gallery view"); non-image
+// files stay download-only, no preview. The gallery is owned by ThreadPage
+// (not this component) since it needs every image in the conversation, not
+// just this one.
+function AttachmentBubble({ message, onOpen }: { message: Message; onOpen: () => void }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,7 +82,15 @@ function AttachmentBubble({ message }: { message: Message }) {
     return (
       <div data-testid="attachment-image">
         {objectUrl ? (
-          <img src={objectUrl} alt="" className="max-h-64 max-w-full rounded-lg" />
+          <button
+            type="button"
+            onClick={onOpen}
+            data-testid="attachment-image-open"
+            className="block cursor-zoom-in"
+            aria-label="Open image"
+          >
+            <img src={objectUrl} alt="" className="max-h-64 max-w-full rounded-lg" />
+          </button>
         ) : (
           <div className="flex h-32 w-48 items-center justify-center rounded-lg bg-black/10 text-xs">
             {error ?? (loading ? 'Loading…' : 'Image')}
@@ -96,6 +111,25 @@ function AttachmentBubble({ message }: { message: Message }) {
       📎 {loading ? 'Downloading…' : error ? error : 'Download file'}
     </button>
   );
+}
+
+// Shared by the reply bar's "insert into draft" row and the per-message
+// React picker — docs/00-PRD.md F5a.
+const QUICK_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+function quotedPreviewFor(message: Message): string {
+  switch (message.kind) {
+    case 'image':
+      return '📎 Photo';
+    case 'file':
+      return '📎 File';
+    case 'voice':
+      return '🎤 Voice message';
+    case 'call_event':
+      return message.body ?? '📞 Call';
+    default:
+      return message.body ?? '';
+  }
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -147,6 +181,7 @@ export function ThreadPage() {
   const isOnline = useOnlineStatus();
   const callStatus = useCallStore((s) => s.status);
   const { data, isPending, isError } = useConversation(conversationId);
+  const { data: me } = useMe();
   const {
     status,
     showReconnecting,
@@ -154,10 +189,12 @@ export function ThreadPage() {
     pending,
     typing,
     receipts,
+    reactions,
     sendMessage,
     retryMessage,
     sendTyping,
     sendRead,
+    sendReaction,
   } = useConversationSocket(conversationId);
   const peerReadSeq = data ? (receipts.get(data.peer.userId)?.readSeq ?? 0) : 0;
   const setReadMarker = useSetReadMarker(conversationId ?? '');
@@ -169,8 +206,37 @@ export function ThreadPage() {
   const cameraFallbackRef = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
+  const [reactPickerFor, setReactPickerFor] = useState<string | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  // True while the viewport is pinned to the newest message — reset on
+  // conversation switch, cleared once the reader scrolls away from the
+  // bottom (see the scroll listener below).
+  const stickToBottomRef = useRef(true);
   const rows = useMemo(() => buildRows(messages), [messages]);
+  const messageBySeq = useMemo(() => {
+    const map = new Map<number, Message>();
+    for (const m of messages) map.set(m.seq, m);
+    return map;
+  }, [messages]);
+  const imageMessages = useMemo(
+    () => messages.filter((m) => m.kind === 'image' && !m.deletedAt),
+    [messages],
+  );
+
+  async function handleCopy(message: Message) {
+    try {
+      await navigator.clipboard.writeText(message.body ?? quotedPreviewFor(message));
+      setCopiedClientId(message.clientId);
+      setTimeout(() => setCopiedClientId((id) => (id === message.clientId ? null : id)), 1500);
+    } catch {
+      // Clipboard permission denied or unsupported — no user-facing recovery
+      // worth adding for a nice-to-have copy shortcut.
+    }
+  }
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -188,8 +254,54 @@ export function ThreadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastSeq]);
 
+  // `virtualizer.scrollToIndex` alone isn't enough to land at the true
+  // bottom: it scrolls against `estimateSize`'s flat guess, but real rows
+  // (multi-line text, reply quotes, reaction pills, images) are almost
+  // always taller than the estimate, so `measureElement`'s later correction
+  // grows the scrollable area *after* the scroll already happened, leaving a
+  // gap at the bottom. Watching the sized content div directly and re-
+  // snapping via `scrollTop` (not the estimate-based API) whenever it grows
+  // is what actually keeps the viewport pinned through every correction —
+  // including attachment/voice thumbnails loading in asynchronously.
   useEffect(() => {
-    if (rows.length > 0) virtualizer.scrollToIndex(rows.length - 1, { align: 'end' });
+    stickToBottomRef.current = true;
+  }, [conversationId]);
+
+  useEffect(() => {
+    const scrollEl = parentRef.current;
+    if (!scrollEl) return;
+    function onScroll() {
+      if (!scrollEl) return;
+      const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      stickToBottomRef.current = distanceFromBottom < 80;
+    }
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollEl.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const scrollEl = parentRef.current;
+    const content = contentRef.current;
+    if (!scrollEl || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollEl.scrollTop = scrollEl.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (rows.length === 0) return;
+    if (stickToBottomRef.current) {
+      virtualizer.scrollToIndex(rows.length - 1, { align: 'end' });
+      // One more pass on the next frame: the row(s) just scrolled to may
+      // still be at their estimated height (measureElement hasn't measured
+      // them yet), so the first jump can undershoot.
+      requestAnimationFrame(() => {
+        const scrollEl = parentRef.current;
+        if (scrollEl && stickToBottomRef.current) scrollEl.scrollTop = scrollEl.scrollHeight;
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length]);
 
@@ -208,8 +320,13 @@ export function ThreadPage() {
   function handleSend() {
     const body = draft.trim();
     if (!body) return;
-    sendMessage({ clientId: uuidv7(), kind: 'text', body });
+    sendMessage(
+      replyTo
+        ? { clientId: uuidv7(), kind: 'text', body, replyToSeq: replyTo.seq }
+        : { clientId: uuidv7(), kind: 'text', body },
+    );
     setDraft('');
+    setReplyTo(null);
     sendTyping(false);
   }
 
@@ -276,6 +393,13 @@ export function ThreadPage() {
 
   return (
     <div className="flex h-full flex-col">
+      {galleryIndex !== null && galleryIndex >= 0 && (
+        <MediaGallery
+          images={imageMessages}
+          startIndex={galleryIndex}
+          onClose={() => setGalleryIndex(null)}
+        />
+      )}
       {cameraOpen && (
         <CameraCaptureSheet
           onCapture={handleCameraCapture}
@@ -358,7 +482,7 @@ export function ThreadPage() {
             No messages yet — say hi.
           </div>
         )}
-        <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        <div ref={contentRef} style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((item) => {
             const row = rows[item.index];
             if (!row) return null;
@@ -412,6 +536,83 @@ export function ThreadPage() {
                   : message.seq <= peerReadSeq
                     ? '✓✓'
                     : '✓';
+            const quoted = message.replyToSeq != null ? messageBySeq.get(message.replyToSeq) : undefined;
+            const messageReactions = reactions.get(message.seq) ?? [];
+            const reactionGroups = new Map<string, string[]>();
+            for (const r of messageReactions) {
+              const list = reactionGroups.get(r.emoji) ?? [];
+              list.push(r.userId);
+              reactionGroups.set(r.emoji, list);
+            }
+            const pickerOpen = reactPickerFor === message.clientId;
+            // Reply and React are separate actions (docs/00-PRD.md F5a): Reply
+            // opens the composer's reply bar, React toggles a persisted pill
+            // rendered under the bubble for both participants — they don't
+            // share a button or a picker.
+            const actions = !message.deletedAt && (
+              <div className="flex shrink-0 items-start gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                {pickerOpen ? (
+                  <div
+                    data-testid="react-picker"
+                    className="flex items-center gap-0.5 rounded-full bg-surface px-1 py-0.5 shadow-sm"
+                  >
+                    {QUICK_EMOJI.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => {
+                          sendReaction(message.seq, emoji);
+                          setReactPickerFor(null);
+                        }}
+                        data-testid="react-picker-emoji"
+                        aria-label={`React ${emoji}`}
+                        className="rounded-full p-0.5 text-sm hover:bg-surface-sunken"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setReactPickerFor(null)}
+                      aria-label="Close"
+                      className="rounded-full p-0.5 text-xs text-ink-muted hover:bg-surface-sunken"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setReactPickerFor(message.clientId)}
+                    data-testid="message-react"
+                    aria-label="React"
+                    className="rounded-full p-1 text-ink-muted hover:bg-surface-sunken hover:text-ink"
+                  >
+                    ☺
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(message)}
+                  data-testid="message-reply"
+                  aria-label="Reply"
+                  className="rounded-full p-1 text-ink-muted hover:bg-surface-sunken hover:text-ink"
+                >
+                  ↩
+                </button>
+                {message.kind === 'text' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleCopy(message)}
+                    data-testid="message-copy"
+                    aria-label="Copy"
+                    className="rounded-full p-1 text-ink-muted hover:bg-surface-sunken hover:text-ink"
+                  >
+                    {copiedClientId === message.clientId ? '✓' : '⧉'}
+                  </button>
+                )}
+              </div>
+            );
             return (
               <div
                 key={row.key}
@@ -427,48 +628,95 @@ export function ThreadPage() {
                   transform: `translateY(${item.start}px)`,
                 }}
                 className={cn(
-                  'flex py-0.5',
+                  'group flex items-end gap-1 py-0.5',
                   own ? 'justify-end' : 'justify-start',
                   row.grouped && 'pt-0',
                 )}
               >
-                <div
-                  className={cn(
-                    'max-w-[85%] min-w-0 rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[75%]',
-                    message.kind === 'voice' && 'min-w-[220px] max-w-[280px]',
-                    own ? 'bg-brand-500 text-white' : 'bg-surface text-ink',
-                  )}
-                >
-                  {message.deletedAt ? (
-                    <span className="italic opacity-70">Message deleted</span>
-                  ) : message.kind === 'file' || message.kind === 'image' ? (
-                    <AttachmentBubble message={message} />
-                  ) : message.kind === 'voice' && message.attachmentId ? (
-                    <VoiceMessagePlayer attachmentId={message.attachmentId} own={own} />
-                  ) : (
-                    message.body
-                  )}
+                {own && actions}
+                <div className={cn('flex min-w-0 flex-col gap-0.5', own ? 'items-end' : 'items-start')}>
                   <div
                     className={cn(
-                      'mt-1 flex items-center justify-end gap-1 text-right text-[10px] opacity-70',
-                      own && tick === '✓✓' && 'text-sky-200 opacity-100',
+                      'max-w-full rounded-2xl px-3 py-2 text-sm shadow-sm',
+                      message.kind === 'voice' && 'min-w-[220px] max-w-[280px]',
+                      own ? 'bg-brand-500 text-white' : 'bg-surface text-ink',
                     )}
-                    data-testid="message-tick"
                   >
-                    {formatTime(message.createdAt)}
-                    {own && ` · ${tick}`}
-                    {own && pendingStatus === 'error' && (
-                      <button
-                        type="button"
-                        onClick={() => retryMessage(message.clientId)}
-                        data-testid="message-retry"
-                        className="ml-1 underline"
+                    {quoted && (
+                      <div
+                        data-testid="message-quote"
+                        className={cn(
+                          'mb-1 truncate rounded border-l-2 pl-2 text-xs opacity-80',
+                          own ? 'border-white/50' : 'border-ink-muted',
+                        )}
                       >
-                        Retry
-                      </button>
+                        {quotedPreviewFor(quoted)}
+                      </div>
                     )}
+                    {message.deletedAt ? (
+                      <span className="italic opacity-70">Message deleted</span>
+                    ) : message.kind === 'file' || message.kind === 'image' ? (
+                      <AttachmentBubble
+                        message={message}
+                        onOpen={() =>
+                          setGalleryIndex(imageMessages.findIndex((m) => m.clientId === message.clientId))
+                        }
+                      />
+                    ) : message.kind === 'voice' && message.attachmentId ? (
+                      <VoiceMessagePlayer attachmentId={message.attachmentId} own={own} />
+                    ) : (
+                      message.body
+                    )}
+                    <div
+                      className={cn(
+                        'mt-1 flex items-center justify-end gap-1 text-right text-[10px] opacity-70',
+                        own && tick === '✓✓' && 'text-sky-200 opacity-100',
+                      )}
+                      data-testid="message-tick"
+                    >
+                      {formatTime(message.createdAt)}
+                      {own && ` · ${tick}`}
+                      {own && pendingStatus === 'error' && (
+                        <button
+                          type="button"
+                          onClick={() => retryMessage(message.clientId)}
+                          data-testid="message-retry"
+                          className="ml-1 underline"
+                        >
+                          Retry
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {/* Reaction pills render under the bubble like standard
+                      messengers — a persisted, peer-visible toggle, distinct
+                      from the reply bar's "insert emoji into draft" row. */}
+                  {reactionGroups.size > 0 && (
+                    <div className="flex flex-wrap gap-1" data-testid="message-reactions">
+                      {[...reactionGroups.entries()].map(([emoji, userIds]) => {
+                        const mine = !!me && userIds.includes(me.user.id);
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => sendReaction(message.seq, emoji)}
+                            data-testid="message-reaction-pill"
+                            className={cn(
+                              'flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs',
+                              mine
+                                ? 'border-brand-500 bg-brand-50 text-brand-700'
+                                : 'border-border-subtle bg-surface text-ink-muted',
+                            )}
+                          >
+                            <span>{emoji}</span>
+                            <span>{userIds.length}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+                {!own && actions}
               </div>
             );
           })}
@@ -482,7 +730,42 @@ export function ThreadPage() {
           onClose={() => setVoiceOpen(false)}
         />
       ) : (
-      <div className="flex items-end gap-1 border-t border-border-subtle bg-surface p-2 sm:gap-2 sm:p-3">
+      <div className="border-t border-border-subtle bg-surface">
+        {replyTo && (
+          <div
+            data-testid="reply-preview"
+            className="flex items-center gap-2 border-b border-border-subtle px-3 py-1.5 text-xs sm:px-4"
+          >
+            <div className="min-w-0 flex-1 truncate border-l-2 border-brand-500 pl-2 text-ink-muted">
+              Replying to {data && replyTo.senderId === data.peer.userId ? data.peer.displayName : 'yourself'}:{' '}
+              {quotedPreviewFor(replyTo)}
+            </div>
+            <div className="flex shrink-0 gap-0.5">
+              {QUICK_EMOJI.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setDraft((d) => d + emoji)}
+                  data-testid="quick-emoji"
+                  className="rounded p-0.5 text-sm hover:bg-surface-sunken"
+                  aria-label={`Insert ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              data-testid="reply-cancel"
+              aria-label="Cancel reply"
+              className="shrink-0 text-ink-muted hover:text-ink"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      <div className="flex items-end gap-1 p-2 sm:gap-2 sm:p-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -563,6 +846,7 @@ export function ThreadPage() {
         >
           Send
         </button>
+      </div>
       </div>
       )}
     </div>

@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 // Relative, not `@shared`: this module is pulled into src/sw.ts's separate
 // bundle (via outbox.ts) alongside the app bundle, and only relative imports
 // are guaranteed to resolve in both (see api.ts's note).
-import type { Message, MessageKind } from '../../shared/messages';
+import type { Message, MessageKind, Reaction } from '../../shared/messages';
 import type { ClientErrorCode } from './api';
 
 export type OutboxStatus = 'pending' | 'sending' | 'sent' | 'failed';
@@ -43,6 +43,17 @@ export interface BlobRow {
   fetchedAt: number;
 }
 
+// Mirrors ConversationDO's `reactions` table (docs/02 §2) client-side. Needed
+// because the server only resends reactions for messages actually included
+// in a `backfill` frame (docs/03 §2.1) — on a reload where `lastSeq` already
+// matches the server (nothing new to backfill), an in-memory-only reaction
+// state would come back empty even though the reaction still exists
+// server-side. Caching it the same way `messages`/`lastSeq` already are
+// (docs/02 §7) is what makes it survive a refresh.
+export interface ReactionRow extends Reaction {
+  conversationId: string;
+}
+
 // Schema mirrors docs/02 §7 verbatim (the client/server contract for
 // IndexedDB layout) so later milestones (M9 attachments, M4-era conversation
 // list caching) can start using `blobs`/`conversations` without a schema
@@ -52,6 +63,7 @@ class RippleDB extends Dexie {
   messages!: Table<MessageRow, [string, number]>;
   meta!: Table<MetaRow, string>;
   blobs!: Table<BlobRow, string>;
+  reactions!: Table<ReactionRow, [string, number, string, string]>;
 
   constructor() {
     super('ripple');
@@ -61,6 +73,9 @@ class RippleDB extends Dexie {
       outbox: 'clientId, status, createdAt',
       blobs: 'attachmentId',
       meta: 'key',
+    });
+    this.version(2).stores({
+      reactions: '[conversationId+seq+userId+emoji], conversationId, [conversationId+seq]',
     });
   }
 }

@@ -10,6 +10,7 @@ import {
   previewTextFor,
   MESSAGE_BODY_MAX_LENGTH,
   type Message,
+  type Reaction,
   type SendMessageInput,
 } from '../shared/messages';
 import { uuidv7 } from '../shared/id';
@@ -43,6 +44,12 @@ type MessageRow = {
   deleted_at: number | null;
   created_at: number;
 };
+
+type ReactionRow = { message_seq: number; user_id: string; emoji: string };
+
+function rowToReaction(row: ReactionRow): Reaction {
+  return { seq: row.message_seq, userId: row.user_id, emoji: row.emoji };
+}
 
 function rowToMessage(row: MessageRow): Message {
   return {
@@ -114,6 +121,21 @@ export class ConversationDO extends DurableObject<Env> {
       ctx.storage.sql.exec(`
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)
       `);
+      // docs/02 §2: one row per (message, user, emoji) — a `react` frame
+      // toggles a row rather than logging every tap (see webSocketMessage's
+      // 'react' case).
+      ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS reactions (
+          message_seq INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          emoji TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (message_seq, user_id, emoji)
+        )
+      `);
+      ctx.storage.sql.exec(
+        `CREATE INDEX IF NOT EXISTS idx_reactions_msg ON reactions(message_seq)`,
+      );
       if (ctx.id.name) this.rememberConversationId(ctx.id.name);
       return Promise.resolve();
     });
@@ -263,6 +285,7 @@ export class ConversationDO extends DurableObject<Env> {
           t: 'backfill',
           messages: rows.messages,
           hasMore: rows.hasMore,
+          reactions: rows.reactions,
         });
         return;
       }
@@ -303,6 +326,36 @@ export class ConversationDO extends DurableObject<Env> {
           deliveredSeq: frame.seq,
           readSeq: frame.seq,
         });
+        return;
+      }
+      case 'react': {
+        const now = Date.now();
+        const [existing] = [
+          ...this.ctx.storage.sql.exec<ReactionRow>(
+            `SELECT * FROM reactions WHERE message_seq = ? AND user_id = ? AND emoji = ?`,
+            frame.seq,
+            attachment.userId,
+            frame.emoji,
+          ),
+        ];
+        const on = !existing;
+        if (existing) {
+          this.ctx.storage.sql.exec(
+            `DELETE FROM reactions WHERE message_seq = ? AND user_id = ? AND emoji = ?`,
+            frame.seq,
+            attachment.userId,
+            frame.emoji,
+          );
+        } else {
+          this.ctx.storage.sql.exec(
+            `INSERT INTO reactions (message_seq, user_id, emoji, created_at) VALUES (?, ?, ?, ?)`,
+            frame.seq,
+            attachment.userId,
+            frame.emoji,
+            now,
+          );
+        }
+        this.broadcast({ t: 'reaction', seq: frame.seq, userId: attachment.userId, emoji: frame.emoji, on });
         return;
       }
       case 'send': {
@@ -380,7 +433,10 @@ export class ConversationDO extends DurableObject<Env> {
     return rows.map(rowToMessage).reverse();
   }
 
-  private queryMessagesAfter(lastSeq: number, cap: number): { messages: Message[]; hasMore: boolean } {
+  private queryMessagesAfter(
+    lastSeq: number,
+    cap: number,
+  ): { messages: Message[]; hasMore: boolean; reactions: Reaction[] } {
     const rows = [
       ...this.ctx.storage.sql.exec<MessageRow>(
         `SELECT * FROM messages WHERE seq > ? ORDER BY seq ASC LIMIT ?`,
@@ -389,7 +445,23 @@ export class ConversationDO extends DurableObject<Env> {
       ),
     ];
     const hasMore = rows.length > cap;
-    return { messages: rows.slice(0, cap).map(rowToMessage), hasMore };
+    const messages = rows.slice(0, cap).map(rowToMessage);
+    return { messages, hasMore, reactions: this.reactionsForSeqs(messages.map((m) => m.seq)) };
+  }
+
+  // Shared by the WS `hello`/backfill path and the REST `GET /:id/messages`
+  // fallback (docs/03 §1) — both need "reactions on just these messages",
+  // never the whole conversation's history.
+  reactionsForSeqs(seqs: number[]): Reaction[] {
+    if (seqs.length === 0) return [];
+    const placeholders = seqs.map(() => '?').join(',');
+    const rows = [
+      ...this.ctx.storage.sql.exec<ReactionRow>(
+        `SELECT * FROM reactions WHERE message_seq IN (${placeholders})`,
+        ...seqs,
+      ),
+    ];
+    return rows.map(rowToReaction);
   }
 
   // Idempotent on `clientId` (docs/03 §2.1) — the mechanism both the WS

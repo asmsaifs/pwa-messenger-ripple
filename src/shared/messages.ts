@@ -38,9 +38,19 @@ export type SendMessageInput = z.infer<typeof sendMessageInputSchema>;
 export const sendMessageResponseSchema = z.object({ message: messageSchema });
 export type SendMessageResponse = z.infer<typeof sendMessageResponseSchema>;
 
+// docs/02 §2's `reactions` table, one row per (message, user, emoji) — a
+// `react` frame toggles a single row rather than logging every tap.
+export const reactionSchema = z.object({
+  seq: z.number().int(),
+  userId: z.string(),
+  emoji: z.string().min(1).max(8),
+});
+export type Reaction = z.infer<typeof reactionSchema>;
+
 export const listMessagesResponseSchema = z.object({
   messages: z.array(messageSchema),
   hasMore: z.boolean(),
+  reactions: z.array(reactionSchema),
 });
 export type ListMessagesResponse = z.infer<typeof listMessagesResponseSchema>;
 
@@ -50,6 +60,7 @@ export const clientFrameSchema = z.discriminatedUnion('t', [
   sendMessageInputSchema.extend({ t: z.literal('send') }),
   z.object({ t: z.literal('read'), seq: z.number().int().nonnegative() }),
   z.object({ t: z.literal('typing'), on: z.boolean() }),
+  z.object({ t: z.literal('react'), seq: z.number().int().nonnegative(), emoji: z.string().min(1).max(8) }),
   z.object({ t: z.literal('ping') }),
 ]);
 export type ClientFrame = z.infer<typeof clientFrameSchema>;
@@ -58,7 +69,12 @@ const memberPresenceSchema = z.object({ userId: z.string(), presence: z.string()
 
 export const serverFrameSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ready'), lastSeq: z.number(), members: z.array(memberPresenceSchema) }),
-  z.object({ t: z.literal('backfill'), messages: z.array(messageSchema), hasMore: z.boolean() }),
+  z.object({
+    t: z.literal('backfill'),
+    messages: z.array(messageSchema),
+    hasMore: z.boolean(),
+    reactions: z.array(reactionSchema),
+  }),
   z.object({ t: z.literal('message'), message: messageSchema }),
   z.object({
     t: z.literal('receipt'),
@@ -67,6 +83,13 @@ export const serverFrameSchema = z.discriminatedUnion('t', [
     readSeq: z.number(),
   }),
   z.object({ t: z.literal('typing'), userId: z.string(), on: z.boolean() }),
+  z.object({
+    t: z.literal('reaction'),
+    seq: z.number().int(),
+    userId: z.string(),
+    emoji: z.string(),
+    on: z.boolean(),
+  }),
   z.object({
     t: z.literal('presence'),
     userId: z.string(),

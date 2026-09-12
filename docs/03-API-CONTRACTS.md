@@ -88,15 +88,17 @@ Client → server:
 | { t:'send';   clientId:string; kind:'text'|'file'|'image'|'voice'; body?:string; attachmentId?:string; replyToSeq?:number }
 | { t:'read';   seq:number }
 | { t:'typing'; on:boolean }
+| { t:'react';  seq:number; emoji:string }                // toggle: add if the caller hasn't reacted with this emoji on this seq, else remove
 | { t:'ping' }
 ```
 Server → client:
 ```ts
 | { t:'ready';   lastSeq:number; members:{userId:string;presence:string}[] }
-| { t:'backfill';messages:Message[]; hasMore:boolean }   // reply to hello, seq > lastSeq, cap 500
+| { t:'backfill';messages:Message[]; hasMore:boolean; reactions:{seq:number;userId:string;emoji:string}[] }   // reply to hello, seq > lastSeq, cap 500; reactions cover only the returned messages
 | { t:'message'; message:Message }                        // includes echo to sender w/ clientId
 | { t:'receipt'; userId:string; deliveredSeq:number; readSeq:number }
 | { t:'typing';  userId:string; on:boolean }
+| { t:'reaction';seq:number; userId:string; emoji:string; on:boolean }   // broadcast to all sockets incl. the toggling user, `on` is the resulting state
 | { t:'presence';userId:string; presence:'online'|'away'|'offline' }
 | { t:'error';   code:string; message:string; clientId?:string }
 | { t:'pong' }
@@ -108,6 +110,7 @@ Rules:
 - After each accepted `send`, the DO: broadcasts → enqueues `push-queue` for members with no live socket → `setAlarm(now+1000)` to flush the D1 preview (debounced; one D1 write per burst, not per message).
 - Backpressure: if `ws.readyState !== OPEN` or the send buffer is large, drop the socket rather than buffer unbounded.
 - Idle: client pings every 30 s; DO closes sockets silent for 90 s (hibernation means an open socket is cheap, but a dead one still holds a slot).
+- `react` doesn't check `members_cache` before writing (a stale reaction from a since-removed member is cosmetic, unlike a `send`) but does still require an open, authenticated socket — same as every other frame. No push/notification is enqueued for a reaction, and it does not touch the debounced D1 preview alarm.
 
 ### 2.2 `UserDO` — `/api/ws/user`
 One socket per device, open for the whole session.

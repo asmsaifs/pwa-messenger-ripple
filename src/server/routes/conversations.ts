@@ -109,12 +109,12 @@ conversationsRoute.get('/:id/messages', async (c) => {
   // DO's `listMessages` already over-fetches by one to signal `hasMore`
   // (ascending order — the oldest row of an over-fetched page is the extra
   // one, so it's dropped from the front, not the back).
-  const rows = await conversationStub(c.env, id).listMessages(before, limit);
+  const stub = conversationStub(c.env, id);
+  const rows = await stub.listMessages(before, limit);
   const hasMore = rows.length > limit;
-  const body = listMessagesResponseSchema.parse({
-    messages: hasMore ? rows.slice(1) : rows,
-    hasMore,
-  });
+  const messages = hasMore ? rows.slice(1) : rows;
+  const reactions = await stub.reactionsForSeqs(messages.map((m) => m.seq));
+  const body = listMessagesResponseSchema.parse({ messages, hasMore, reactions });
   return c.json(body);
 });
 

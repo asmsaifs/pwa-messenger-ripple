@@ -16,6 +16,7 @@
 | F3 | Friend invitations by email address | Invite pending even if invitee has no account yet ("pre-registration invite") |
 | F4 | Friend list, accept/decline/block/remove | Bidirectional edge only after accept |
 | F5 | 1:1 text chat, realtime | Optimistic send, delivered/read receipts, typing indicator |
+| F5a | Reply-to-message, copy message, emoji reactions | Reply quotes original by `seq`; reactions are per-user-per-emoji toggles stored in ConversationDO, no notification/push of their own |
 | F6 | File send | any type, ≤ 25 MB v1, virus-scan hook stub |
 | F7 | Photo from camera | `getUserMedia` capture in-app + `<input capture>` fallback; client-side compress |
 | F8 | Voice message | MediaRecorder (`audio/webm;codecs=opus`), waveform preview, ≤ 5 min |
@@ -25,7 +26,7 @@
 | F12 | Install prompt + app icons/shortcuts | `beforeinstallprompt`, maskable icons |
 
 ## 4. v2 backlog (explicitly out of v1)
-Group calls (SFU), video calls, screen share, E2E encryption (MLS), message search, reactions, message edit/delete-for-everyone, call recording, i18n, contact sync, Play Store TWA packaging.
+Group calls (SFU), video calls, screen share, E2E encryption (MLS), message search, message edit/delete-for-everyone, call recording, i18n, contact sync, Play Store TWA packaging.
 
 ## 5. Non-functional requirements
 - **Call setup**: p50 < 1.5 s, p95 < 3 s from accept to first audio.

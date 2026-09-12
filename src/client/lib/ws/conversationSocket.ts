@@ -4,9 +4,11 @@ import {
   serverFrameSchema,
   type ClientFrame,
   type Message,
+  type Reaction,
   type ServerFrame,
 } from '@shared/messages';
 import { db, lastSeqMetaKey, type OutboxRow } from '../db';
+import { hydrateReactions, persistReaction, persistReactions } from '../reactions-cache';
 import {
   enqueueOutboxMessage,
   flushOutbox,
@@ -39,6 +41,26 @@ function wsUrl(conversationId: string): string {
 export type TypingState = { userId: string; on: boolean };
 export type ReceiptState = { deliveredSeq: number; readSeq: number };
 
+// Keyed by message `seq`, one entry per (userId, emoji) currently "on" — the
+// server is the sole source of truth for whether a reaction is set (docs/03
+// §2.1's `reaction` frame carries the resulting `on` state, not a delta), so
+// this reducer just replaces the (userId, emoji) tuple's membership rather
+// than incrementing/decrementing a count.
+function applyReaction(
+  prev: Map<number, Reaction[]>,
+  reaction: Reaction,
+  on: boolean,
+): Map<number, Reaction[]> {
+  const next = new Map(prev);
+  const list = (next.get(reaction.seq) ?? []).filter(
+    (r) => !(r.userId === reaction.userId && r.emoji === reaction.emoji),
+  );
+  if (on) list.push(reaction);
+  if (list.length > 0) next.set(reaction.seq, list);
+  else next.delete(reaction.seq);
+  return next;
+}
+
 // Hand-rolled WS client for the ConversationDO protocol (docs/03 §2.1, docs/04
 // §4): reconnect with backoff, `hello`/backfill on (re)connect, and a
 // `clientId -> status` map for optimistic-send UX. Sends and the resulting
@@ -53,6 +75,7 @@ export function useConversationSocket(conversationId: string | undefined) {
   const [pending, setPending] = useState<Map<string, PendingStatus>>(new Map());
   const [typing, setTyping] = useState<TypingState | null>(null);
   const [receipts, setReceipts] = useState<Map<string, ReceiptState>>(new Map());
+  const [reactions, setReactions] = useState<Map<number, Reaction[]>>(new Map());
   const [showReconnecting, setShowReconnecting] = useState(false);
   const [outboxRows, setOutboxRows] = useState<OutboxRow[]>([]);
 
@@ -123,10 +146,22 @@ export function useConversationSocket(conversationId: string | undefined) {
             if (conversationId) void db.messages.put({ ...m, conversationId });
             void markOutboxSent(m.clientId);
           }
+          setReactions((prev) => {
+            let next = prev;
+            for (const r of frame.reactions) next = applyReaction(next, r, true);
+            return next;
+          });
+          if (conversationId) void persistReactions(conversationId, frame.reactions);
           return;
         case 'message':
           applyIncomingMessage(frame.message);
           return;
+        case 'reaction': {
+          const reaction: Reaction = { seq: frame.seq, userId: frame.userId, emoji: frame.emoji };
+          setReactions((prev) => applyReaction(prev, reaction, frame.on));
+          if (conversationId) void persistReaction(conversationId, reaction, frame.on);
+          return;
+        }
         case 'typing':
           setTyping(frame.on ? { userId: frame.userId, on: true } : null);
           if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
@@ -202,12 +237,14 @@ export function useConversationSocket(conversationId: string | undefined) {
     // `0` here would re-backfill everything on every reload instead of just
     // what's missing (docs/02 §7).
     void (async () => {
-      const [cached, meta] = await Promise.all([
+      const [cached, meta, cachedReactions] = await Promise.all([
         db.messages.where('conversationId').equals(conversationId).sortBy('seq'),
         db.meta.get(lastSeqMetaKey(conversationId)),
+        hydrateReactions(conversationId),
       ]);
       if (cancelled) return;
       if (cached.length > 0) setMessages(cached);
+      if (cachedReactions.size > 0) setReactions(cachedReactions);
       lastSeqRef.current = meta?.value ?? 0;
       connect();
     })();
@@ -222,6 +259,7 @@ export function useConversationSocket(conversationId: string | undefined) {
       setMessages([]);
       setPending(new Map());
       setReceipts(new Map());
+      setReactions(new Map());
       lastSeqRef.current = 0;
       attemptRef.current = 0;
     };
@@ -239,6 +277,7 @@ export function useConversationSocket(conversationId: string | undefined) {
       kind: 'text' | 'file' | 'image' | 'voice';
       body?: string;
       attachmentId?: string;
+      replyToSeq?: number;
     }) => {
       if (!conversationId) return;
       setPending((prev) => new Map(prev).set(input.clientId, 'pending'));
@@ -260,6 +299,11 @@ export function useConversationSocket(conversationId: string | undefined) {
 
   const sendTyping = useCallback((on: boolean) => send({ t: 'typing', on }), [send]);
   const sendRead = useCallback((seq: number) => send({ t: 'read', seq }), [send]);
+  // Best-effort, live-socket-only (docs/03 §2.1: no push, no D1 preview
+  // touch, no offline guarantee) — unlike `sendMessage` this doesn't go
+  // through the Dexie outbox, so a toggle sent while offline is just lost
+  // rather than queued, same as `typing`.
+  const sendReaction = useCallback((seq: number, emoji: string) => send({ t: 'react', seq, emoji }), [send]);
 
   // Outbox status (`pending`/`sending` → ⏳, `failed` → retry) is the other
   // half of the tick shown in ThreadPage — a `sent` row is superseded by the
@@ -323,9 +367,11 @@ export function useConversationSocket(conversationId: string | undefined) {
     pending,
     typing,
     receipts,
+    reactions,
     sendMessage,
     retryMessage,
     sendTyping,
     sendRead,
+    sendReaction,
   };
 }

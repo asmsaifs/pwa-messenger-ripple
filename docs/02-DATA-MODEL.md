@@ -183,8 +183,24 @@ CREATE TABLE IF NOT EXISTS members_cache (
   status   TEXT NOT NULL,          -- 'active' | 'blocked'
   synced_at INTEGER NOT NULL
 );
+
+-- one row per (message, user, emoji) — a user can react with several distinct
+-- emoji on the same message; re-sending the same (message,user,emoji) toggles
+-- it off. No FK to `messages` (SQLite FKs are per-connection pragma, and the
+-- DO never deletes a message row outright — only tombstones it), so a
+-- reaction on a since-tombstoned message is just orphaned data the client
+-- stops rendering (deleted_at hides the bubble).
+CREATE TABLE IF NOT EXISTS reactions (
+  message_seq INTEGER NOT NULL,
+  user_id     TEXT NOT NULL,
+  emoji       TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (message_seq, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_reactions_msg ON reactions(message_seq);
 ```
 Notes:
+- **Reactions are toggles, not a log.** `react` with a `(seq, emoji)` the caller already sent removes it; otherwise it's added. No "who reacted first" ordering is exposed beyond `created_at`, and there is no push/notification for a reaction — same rationale as receipts not needing one.
 - **Receipts are per-user high-water marks, not per-message rows.** One row per member instead of one per message per member — ~1000× fewer writes for the same UI.
 - `UNIQUE(client_id)` is the whole offline-retry story: `INSERT ... ON CONFLICT(client_id) DO NOTHING RETURNING *`, then `SELECT` the existing row. Never a duplicate, no matter how many times the outbox retries.
 - Message body cap 4000 chars enforced in the zod schema *and* re-checked in the DO.
