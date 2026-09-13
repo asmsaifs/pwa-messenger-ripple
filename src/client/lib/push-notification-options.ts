@@ -23,6 +23,12 @@ export type PushNotificationOptions = {
   badge: string;
   data?: unknown;
   requireInteraction: boolean;
+  // Android maps a web-push notification to a Chrome-owned NotificationChannel;
+  // Chrome only grants it IMPORTANCE_HIGH (heads-up popup + sound) when the
+  // options include a `vibrate` pattern — omitting it gets IMPORTANCE_DEFAULT,
+  // which lands silently in the shade with no heads-up, no matter the push
+  // `Urgency` header. Every notification needs one, not just calls.
+  vibrate: number[];
   actions?: { action: string; title: string }[] | undefined;
 };
 
@@ -33,6 +39,7 @@ export function notificationOptionsFor(payload: PushPayload): PushNotificationOp
     icon: '/icons/192.png',
     badge: '/icons/192.png',
     data: payload.data,
+    vibrate: payload.type === 'call' ? [300, 200, 300, 200, 300] : [200, 100, 200],
     // Call pushes (M13/M14) need the user to actively accept/decline rather
     // than the notification auto-dismissing — every other type behaves like
     // a normal transient notification (docs/06 §3).

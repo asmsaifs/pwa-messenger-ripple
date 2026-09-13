@@ -22,6 +22,7 @@ describe('notificationOptionsFor', () => {
       { action: 'accept', title: 'Accept' },
     ]);
     expect(options.tag).toBe('call-abc123');
+    expect(options.vibrate.length).toBeGreaterThan(0);
   });
 
   it('closes a ringing notification via the call_cancelled tag match, no actions of its own', () => {
@@ -42,6 +43,7 @@ describe('notificationOptionsFor', () => {
     });
     expect(options.requireInteraction).toBe(false);
     expect(options.actions).toBeUndefined();
+    expect(options.vibrate.length).toBeGreaterThan(0);
   });
 });
 

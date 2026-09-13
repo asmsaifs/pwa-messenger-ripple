@@ -96,10 +96,14 @@ self.addEventListener('push', (event: PushEvent) => {
   event.waitUntil(
     (async () => {
       let title = 'Ripple';
-      let options: NotificationOptions & { data?: unknown } = {
+      // `vibrate` is a real Notification API member (Android heads-up display
+      // depends on it, see push-notification-options.ts) but missing from
+      // this TS lib's `NotificationOptions`, hence the explicit extension.
+      let options: NotificationOptions & { data?: unknown; vibrate?: number[] } = {
         body: 'You have a new notification.',
         icon: '/icons/192.png',
         badge: '/icons/192.png',
+        vibrate: [200, 100, 200],
       };
       try {
         const raw: unknown = event.data?.json();
